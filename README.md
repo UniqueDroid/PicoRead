@@ -10,9 +10,9 @@ PicoRead is [DerJan](https://github.com/UniqueDroid)'s personal fork of [CrossPo
 
 - **Reader engine**: EPUB 2/3 rendering with embedded-style option, image handling, hyphenation, kerning, chapter navigation, footnotes, bookmarks, go-to-percent, auto page turn, orientation control, focus reading, KOReader progress sync and more. 
 
-- **Various formats**: native handling for `.epub`, `.xtc/.xtch`, `.txt`, and `.bmp`.
+- **Various formats**: native handling for `.epub`, `.xtc/.xtch`, `.txt`, and `.bmp`. For PDFs: export the pages as images on a computer (any PDF-to-image tool works) and drop them in one folder on the SD card - the `.bmp` viewer already flips through every image in a folder with the Left/Right buttons.
 
-- **PDF support (PicoRead-only)**: convert PDFs to `.xtc` image pages right from the web UI (`/pdf-to-xtc`) — no reflow, but readable as a comic/image-style book.
+- **Web-based firmware updates (PicoRead-only)**: check for and install updates from the **Firmware Update** page in the web menu, with a live progress bar and SHA256 verification before flashing - no USB cable needed.
 
 - **Dictionary lookup (PicoRead-only)**: inline word lookup in the reader menu, using installed FreeDict dictionaries.
 
@@ -270,7 +270,7 @@ Want to build your own device? Be sure to check out the [de-link](https://github
 
 PicoRead is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) by Dave Allie and contributors, licensed under MIT (see [LICENSE](./LICENSE)). All credit for the original reader engine, activity architecture, HAL, and the huge amount of design work behind it goes to that upstream project — go star it and, if you can, [support the original maintainers](https://app.royalty.dev/crosspoint-reader/crosspoint-reader).
 
-What's different in this fork so far: a PDF-to-XTC converter, cross-book bookmarks, and offline dictionary lookup (see [What can PicoRead do?](#what-can-picoread-do) above).
+What's different in this fork so far: web-based firmware updates, cross-book bookmarks, and offline dictionary lookup (see [What can PicoRead do?](#what-can-picoread-do) above).
 
 ---
 

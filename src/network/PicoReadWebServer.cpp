@@ -28,11 +28,8 @@
 #include "html/FirmwareUpdatePageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
-#include "html/PdfToXtcPageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
-#include "html/js/pdf_minJs.generated.h"
-#include "html/js/pdf_worker_minJs.generated.h"
 #include "util/BookCacheUtils.h"
 
 namespace {
@@ -145,9 +142,6 @@ void PicoReadWebServer::begin() {
   server->on("/", HTTP_GET, [this] { handleRoot(); });
   server->on("/files", HTTP_GET, [this] { handleFileList(); });
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
-  server->on("/pdf-to-xtc", HTTP_GET, [this] { handlePdfToXtcPage(); });
-  server->on("/js/pdf.min.js", HTTP_GET, [this] { handlePdfJs(); });
-  server->on("/js/pdf.worker.min.js", HTTP_GET, [this] { handlePdfWorkerJs(); });
 
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
@@ -363,23 +357,6 @@ static void sendHtmlContent(WebServer* server, const char* data, size_t len) {
 void PicoReadWebServer::handleRoot() const {
   sendHtmlContent(server.get(), HomePageHtml, sizeof(HomePageHtml));
   LOG_DBG("WEB", "Served root page");
-}
-
-void PicoReadWebServer::handlePdfToXtcPage() const {
-  sendHtmlContent(server.get(), PdfToXtcPageHtml, sizeof(PdfToXtcPageHtml));
-  LOG_DBG("WEB", "Served PDF-to-XTC page");
-}
-
-void PicoReadWebServer::handlePdfJs() const {
-  server->sendHeader("Content-Encoding", "gzip");
-  server->send_P(200, "application/javascript", pdf_minJs, pdf_minJsCompressedSize);
-  LOG_DBG("WEB", "Served pdf.min.js");
-}
-
-void PicoReadWebServer::handlePdfWorkerJs() const {
-  server->sendHeader("Content-Encoding", "gzip");
-  server->send_P(200, "application/javascript", pdf_worker_minJs, pdf_worker_minJsCompressedSize);
-  LOG_DBG("WEB", "Served pdf.worker.min.js");
 }
 
 void PicoReadWebServer::handleJszip() const {

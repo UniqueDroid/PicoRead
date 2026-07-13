@@ -91,9 +91,6 @@ class PicoReadWebServer {
   // Request handlers
   void handleRoot() const;
   void handleJszip() const;
-  void handlePdfToXtcPage() const;
-  void handlePdfJs() const;
-  void handlePdfWorkerJs() const;
   void handleNotFound() const;
   void handleStatus() const;
   void handleFileList() const;
