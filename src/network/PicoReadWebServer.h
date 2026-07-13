@@ -124,6 +124,11 @@ class PicoReadWebServer {
   void handleDictionariesPage() const;
   void handleDictionaryList() const;
 
+  // Firmware update handlers
+  void handleFirmwareUpdatePage() const;
+  void handleFirmwareUpdateCheck() const;
+  void handleFirmwareUpdateInstall() const;
+
   // Font upload state
   struct FontUploadState {
     HalFile file;

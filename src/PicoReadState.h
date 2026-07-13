@@ -23,6 +23,13 @@ class PicoReadState {
   bool lastSleepFromReader = false;
   bool showBootScreen = true;
 
+  // Set opportunistically whenever WiFi is already up for another reason (the web
+  // server starting, or an explicit Settings > Check for Updates) - never triggers
+  // its own WiFi connection. Runtime-only, not persisted: a fresh boot re-checks
+  // next time WiFi comes up anyway.
+  bool firmwareUpdateAvailable = false;
+  std::string firmwareUpdateLatestVersion;
+
   // Returns true if idx was shown within the last checkCount picks.
   // Walks backwards from the most recently written slot.
   bool isRecentSleep(uint16_t idx, uint8_t checkCount) const;

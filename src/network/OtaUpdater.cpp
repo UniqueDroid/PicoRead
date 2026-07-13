@@ -5,16 +5,47 @@
 // ip4_addr.h unless seen first. Pin this order; clang-format would otherwise sort
 // the local header last and break the build.
 #include "HttpDownloader.h"
+#include "OtaBootSwitch.h"
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
 #include <esp_ota_ops.h>
 #include <esp_wifi.h>
+#include <mbedtls/sha256.h>
 // clang-format on
 
+#include <cctype>
+#include <cstring>
 #include <string>
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/UniqueDroid/PicoRead/releases/latest";
+
+// GitHub's asset "digest" field looks like "sha256:<hex>". Returns the bare hex string, or
+// empty if the digest is missing, malformed, or not a sha256 digest.
+std::string bareSha256Hex(const std::string& digest) {
+  constexpr char prefix[] = "sha256:";
+  constexpr size_t prefixLen = sizeof(prefix) - 1;
+  if (digest.size() != prefixLen + 64 || digest.compare(0, prefixLen, prefix) != 0) {
+    return "";
+  }
+  return digest.substr(prefixLen);
+}
+
+// Decodes a 64-char hex string into 32 bytes. Returns false on malformed input.
+bool hexDecode32(const std::string& hex, uint8_t out[32]) {
+  if (hex.size() != 64) return false;
+  for (size_t i = 0; i < 32; i++) {
+    char hi = hex[i * 2];
+    char lo = hex[i * 2 + 1];
+    if (!isxdigit(static_cast<unsigned char>(hi)) || !isxdigit(static_cast<unsigned char>(lo))) return false;
+    auto nibble = [](char c) -> uint8_t {
+      if (c >= '0' && c <= '9') return c - '0';
+      return (c | 0x20) - 'a' + 10;  // fold to lowercase
+    };
+    out[i] = static_cast<uint8_t>((nibble(hi) << 4) | nibble(lo));
+  }
+  return true;
+}
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
@@ -51,11 +82,13 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   latestVersion = releaseParser.getTagName();
   otaUrl = releaseParser.getFirmwareUrl();
   otaSize = releaseParser.getFirmwareSize();
+  otaDigest = releaseParser.getFirmwareDigest();
   totalSize = otaSize;
   updateAvailable = true;
 
   LOG_DBG("OTA", "Found update: tag=%s size=%zu", latestVersion.c_str(), otaSize);
   LOG_DBG("OTA", "Firmware URL: %s", otaUrl.c_str());
+  LOG_DBG("OTA", "Firmware digest: %s", otaDigest.empty() ? "(none)" : otaDigest.c_str());
   return OK;
 }
 
@@ -130,6 +163,19 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   /* For better timing and connectivity, we disable power saving for WiFi */
   esp_wifi_set_ps(WIFI_PS_NONE);
 
+  // Verify the download against GitHub's published digest before it's ever allowed to
+  // become the boot target. Only meaningful if the release actually has one (older
+  // releases published before GitHub added asset digests won't).
+  const std::string expectedHex = bareSha256Hex(otaDigest);
+  const bool verifyHash = !expectedHex.empty();
+  mbedtls_sha256_context shaCtx;
+  if (verifyHash) {
+    mbedtls_sha256_init(&shaCtx);
+    mbedtls_sha256_starts(&shaCtx, /*is224=*/0);
+  } else {
+    LOG_ERR("OTA", "No asset digest for this release - skipping checksum verification");
+  }
+
   processedSize = 0;
   int lastReportedPct = -1;
   bool flashOk = true;
@@ -137,6 +183,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
     if (esp_ota_write(otaHandle, data, len) != ESP_OK) {
       flashOk = false;
       return false;  // abort the transfer
+    }
+    if (verifyHash) {
+      mbedtls_sha256_update(&shaCtx, data, len);
     }
     processedSize += len;
     // Fire the callback only on whole-percent change. Per-chunk updates wake the
@@ -157,19 +206,37 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
 
   if (!fetchOk || !flashOk) {
     LOG_ERR("OTA", "Firmware install failed (%s)", flashOk ? "download" : "flash write");
+    if (verifyHash) mbedtls_sha256_free(&shaCtx);
     esp_ota_abort(otaHandle);
     return flashOk ? HTTP_ERROR : INTERNAL_UPDATE_ERROR;
   }
 
-  esp_err = esp_ota_end(otaHandle);  // verifies the written image
+  if (verifyHash) {
+    uint8_t computed[32];
+    mbedtls_sha256_finish(&shaCtx, computed);
+    mbedtls_sha256_free(&shaCtx);
+
+    uint8_t expected[32];
+    if (!hexDecode32(expectedHex, expected) || memcmp(computed, expected, sizeof(computed)) != 0) {
+      LOG_ERR("OTA", "Firmware checksum mismatch (SHA256) - update aborted");
+      esp_ota_abort(otaHandle);
+      return CHECKSUM_ERROR;
+    }
+    LOG_INF("OTA", "Firmware checksum verified");
+  }
+
+  esp_err = esp_ota_end(otaHandle);  // finalizes the write and validates the image itself
   if (esp_err != ESP_OK) {
     LOG_ERR("OTA", "esp_ota_end failed: %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
 
-  esp_err = esp_ota_set_boot_partition(updatePartition);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_ota_set_boot_partition failed: %s", esp_err_to_name(esp_err));
+  // esp_ota_set_boot_partition() re-verifies the image via esp_image_verify(), which on
+  // X3/X4 misreads eFuse block revision through a misaligned bootloader_mmap pointer and
+  // rejects a valid image (see OtaBootSwitch.h). Use the same raw otadata write the
+  // SD-card flash path uses instead - already proven working on this hardware.
+  if (!ota_boot::switchTo(updatePartition)) {
+    LOG_ERR("OTA", "otadata switch failed");
     return INTERNAL_UPDATE_ERROR;
   }
 

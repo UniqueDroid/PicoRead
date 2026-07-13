@@ -11,11 +11,13 @@
 
 #include "MappedInputManager.h"
 #include "NetworkModeSelectionActivity.h"
+#include "PicoReadState.h"
 #include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
 #include "activities/network/CalibreConnectActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "network/OtaUpdater.h"
 #include "util/QrUtils.h"
 
 namespace {
@@ -253,6 +255,7 @@ void PicoReadWebServerActivity::startWebServer() {
     state = WebServerActivityState::SERVER_RUNNING;
     LOG_DBG("WEBACT", "Web server started successfully");
     lastWifiBars = isApMode ? 0 : barsForRssi(WiFi.RSSI(), 0);
+    serverRunningStartedAt = millis();
 
     // Force an immediate render since we're transitioning from a subactivity
     // that had its own rendering task. We need to make sure our display is shown.
@@ -265,9 +268,24 @@ void PicoReadWebServerActivity::startWebServer() {
   }
 }
 
+void PicoReadWebServerActivity::checkForFirmwareUpdateIfDue() {
+  if (isApMode || otaCheckDone) return;
+  if (millis() - serverRunningStartedAt < 3000) return;  // let the QR/IP screen show first
+  otaCheckDone = true;
+
+  OtaUpdater updater;
+  if (updater.checkForUpdate() != OtaUpdater::OK) return;
+
+  std::lock_guard<std::mutex> lock(APP_STATE.getMutex());
+  APP_STATE.firmwareUpdateAvailable = updater.isUpdateNewer();
+  APP_STATE.firmwareUpdateLatestVersion = updater.getLatestVersion();
+}
+
 void PicoReadWebServerActivity::loop() {
   // Handle different states
   if (state == WebServerActivityState::SERVER_RUNNING) {
+    checkForFirmwareUpdateIfDue();
+
     // Handle DNS requests for captive portal (AP mode only)
     if (isApMode && dnsServer) {
       dnsServer->processNextRequest();

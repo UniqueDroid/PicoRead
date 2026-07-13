@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PicoRead - Firmware Update</title>
+    <style>
+      :root {
+        --font-color: #333;
+        --bg: #f5f5f5;
+        --title-color: #2c3e50;
+        --card-bg: #FFF;
+        --label-color: #7f8c8d;
+        --border-color: #eee;
+        --accent-color: rgb(110, 154, 130);
+        --accent-hover-color: #5a8c73;
+        --danger-color: #e74c3c;
+        --danger-hover: #c0392b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --font-color: #f5f5f5;
+          --bg: #333;
+          --title-color: #ecf0f1;
+          --card-bg: #444;
+          --label-color: #bdc3c7;
+          --border-color: #555;
+          color-scheme: dark;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--bg);
+        color: var(--font-color);
+      }
+      h1 {
+        color: var(--title-color);
+        border-bottom: 2px solid var(--accent-color);
+        padding-bottom: 10px;
+      }
+      h2 { color: var(--title-color); margin-top: 0; }
+      .card {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .nav-links {
+        margin: 20px 0;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .nav-links a {
+        padding: 10px 20px;
+        color: var(--font-color);
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .nav-links a.active {
+        background-color: var(--accent-color);
+        color: white;
+      }
+      .nav-links a:not(.active):hover {
+        background-color: var(--accent-hover-color);
+        color: white;
+      }
+      dl { margin: 0; }
+      dt { font-weight: bold; color: var(--title-color); }
+      dd { margin: 0 0 12px 0; color: var(--label-color); }
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+      }
+      .btn-primary { background: var(--accent-color); color: white; }
+      .btn-primary:hover { background: var(--accent-hover-color); }
+      .btn-primary:disabled { background: var(--label-color); cursor: not-allowed; }
+      .btn-link { background: none; color: var(--accent-color); padding: 10px 0; text-decoration: underline; }
+      #status {
+        margin-top: 10px;
+        padding: 8px;
+        border-radius: 4px;
+        display: none;
+      }
+      .status-ok { background: #d4edda; color: #155724; display: block !important; }
+      .status-err { background: #f8d7da; color: #721c24; display: block !important; }
+      .empty { color: var(--label-color); }
+      #progress-container {
+        display: none;
+        margin-top: 16px;
+      }
+      #progress-bar {
+        width: 100%;
+        height: 20px;
+        background-color: #e0e0e0;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      #progress-fill {
+        height: 100%;
+        background-color: #27ae60;
+        width: 0%;
+        transition: width 0.3s;
+      }
+      #progress-fill.fail { background-color: var(--danger-color); }
+      #progress-text {
+        text-align: center;
+        margin-top: 5px;
+        font-size: 0.9em;
+        color: var(--label-color);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📚 PicoRead</h1>
+
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/files">File Manager</a>
+      <a href="/settings">Settings</a>
+      <a href="/fonts">Fonts</a>
+      <a href="/pdf-to-xtc">PDF &rarr; XTC</a>
+      <a href="/dictionaries">Dictionaries</a>
+      <a href="/firmware-update" class="active">Firmware Update</a>
+    </div>
+
+    <div class="card">
+      <h2>Firmware Update</h2>
+      <dl id="versionInfo">
+        <dt>Current version</dt>
+        <dd id="currentVersion">Loading&hellip;</dd>
+      </dl>
+      <div id="status"></div>
+      <div id="progress-container">
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+        <div id="progress-text"></div>
+      </div>
+      <div id="actions"></div>
+    </div>
+
+    <script>
+      let checkResult = null;
+
+      function renderActions() {
+        const actions = document.getElementById('actions');
+        actions.replaceChildren();
+        if (!checkResult) return;
+
+        if (checkResult.updateAvailable) {
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-primary';
+          btn.id = 'installBtn';
+          btn.textContent = 'Download & Install Update';
+          btn.addEventListener('click', startInstall);
+          actions.appendChild(btn);
+        }
+
+        const link = document.createElement('a');
+        link.className = 'btn btn-link';
+        link.href = 'https://github.com/UniqueDroid/PicoRead/releases';
+        link.target = '_blank';
+        link.textContent = 'Open GitHub Releases';
+        actions.appendChild(link);
+      }
+
+      async function checkForUpdate() {
+        const status = document.getElementById('status');
+        try {
+          const res = await fetch('/api/firmware-update-check');
+          const data = await res.json();
+          checkResult = data;
+
+          document.getElementById('currentVersion').textContent = data.currentVersion;
+
+          if (!data.ok) {
+            status.className = 'status-err';
+            status.textContent = data.error || 'Could not reach GitHub - check Wi-Fi.';
+          } else if (data.updateAvailable) {
+            status.className = 'status-ok';
+            status.textContent = 'Update available: ' + data.latestVersion;
+          } else {
+            status.className = '';
+            status.style.display = 'block';
+            status.textContent = 'Already on the latest release (' + data.latestVersion + ').';
+          }
+        } catch (e) {
+          checkResult = null;
+          status.className = 'status-err';
+          status.textContent = 'Failed to check for updates: ' + e.message;
+        }
+        renderActions();
+      }
+
+      function setProgress(percent, message, failed) {
+        const container = document.getElementById('progress-container');
+        const fill = document.getElementById('progress-fill');
+        const text = document.getElementById('progress-text');
+        container.style.display = 'block';
+        fill.style.width = percent + '%';
+        fill.className = failed ? 'fail' : '';
+        text.textContent = message;
+      }
+
+      async function startInstall() {
+        if (!confirm('Download and install the latest firmware now? The device will restart when done.')) return;
+
+        const installBtn = document.getElementById('installBtn');
+        if (installBtn) installBtn.disabled = true;
+        setProgress(0, 'Starting firmware update...', false);
+
+        try {
+          const res = await fetch('/api/firmware-update/install', { method: 'POST' });
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let newlineIdx;
+            while ((newlineIdx = buffer.indexOf('\n')) >= 0) {
+              const line = buffer.slice(0, newlineIdx);
+              buffer = buffer.slice(newlineIdx + 1);
+              if (!line.trim()) continue;
+
+              const msg = JSON.parse(line);
+              if (msg.status === 'error') {
+                setProgress(100, msg.message || 'Update failed.', true);
+                if (installBtn) installBtn.disabled = false;
+                return;
+              }
+              if (msg.status === 'done') {
+                setProgress(100, 'Update installed - device is restarting now...', false);
+                return;
+              }
+              setProgress(msg.percent || 0, msg.message || '', false);
+            }
+          }
+        } catch (e) {
+          setProgress(100, 'Update failed: ' + e.message, true);
+          if (installBtn) installBtn.disabled = false;
+        }
+      }
+
+      checkForUpdate();
+    </script>
+  </body>
+</html>

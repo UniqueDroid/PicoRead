@@ -20,6 +20,9 @@ class ReleaseJsonParser {
   const char* getTagName() const;
   const char* getFirmwareUrl() const;
   size_t getFirmwareSize() const;
+  // "sha256:<64 lowercase hex chars>" from GitHub's release asset digest field, or empty
+  // if the API response didn't include one (e.g. released before GitHub added it).
+  const char* getFirmwareDigest() const;
 
  private:
   enum class Position : uint8_t {
@@ -35,6 +38,7 @@ class ReleaseJsonParser {
     ASSET_NAME,
     ASSET_URL,
     ASSET_SIZE,
+    ASSET_DIGEST,
   };
 
   static void sOnKey(void* ctx, const char* key, size_t len);
@@ -59,10 +63,12 @@ class ReleaseJsonParser {
   char tagName[32];
   char firmwareUrl[512];
   size_t firmwareSize;
+  char firmwareDigest[80];
   bool tagFound;
   bool firmwareFound;
 
   char currentAssetName[32];
   char currentAssetUrl[512];
   size_t currentAssetSize;
+  char currentAssetDigest[80];
 };

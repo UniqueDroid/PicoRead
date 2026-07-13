@@ -52,6 +52,14 @@ class PicoReadWebServerActivity final : public Activity {
   // Cached signal-strength bracket (0..4) for the WiFi indicator.
   int lastWifiBars = 0;
 
+  // Opportunistic update check: fires once, a few seconds after the QR/IP screen is
+  // already visible, riding along on the WiFi connection this activity already
+  // opened for file transfer - never triggers a WiFi connection of its own. Skipped
+  // entirely in AP/hotspot mode, which has no upstream internet access.
+  bool otaCheckDone = false;
+  unsigned long serverRunningStartedAt = 0;
+  void checkForFirmwareUpdateIfDue();
+
   void renderServerRunning() const;
   void renderWifiIndicator(int subHeaderTop) const;
 

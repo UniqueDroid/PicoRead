@@ -14,15 +14,18 @@
 #include <cctype>
 
 #include "PicoReadSettings.h"
+#include "PicoReadState.h"
 #include "DictionaryLibrary.h"
 #include "FontInstaller.h"
 #include "OpdsServerStore.h"
+#include "OtaUpdater.h"
 #include "SdCardFontSystem.h"
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "WifiCredentialStore.h"
 #include "html/DictionariesPageHtml.generated.h"
 #include "html/FilesPageHtml.generated.h"
+#include "html/FirmwareUpdatePageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/PdfToXtcPageHtml.generated.h"
@@ -179,6 +182,10 @@ void PicoReadWebServer::begin() {
   // Dictionary management endpoints (upload/delete reuse /mkdir, /upload, /delete)
   server->on("/dictionaries", HTTP_GET, [this] { handleDictionariesPage(); });
   server->on("/api/dictionaries", HTTP_GET, [this] { handleDictionaryList(); });
+
+  server->on("/firmware-update", HTTP_GET, [this] { handleFirmwareUpdatePage(); });
+  server->on("/api/firmware-update-check", HTTP_GET, [this] { handleFirmwareUpdateCheck(); });
+  server->on("/api/firmware-update/install", HTTP_POST, [this] { handleFirmwareUpdateInstall(); });
 
   // OPDS server endpoints
   server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
@@ -1990,4 +1997,110 @@ void PicoReadWebServer::handleDictionaryList() const {
   String responseJson;
   serializeJson(doc, responseJson);
   server->send(200, "application/json", responseJson);
+}
+
+void PicoReadWebServer::handleFirmwareUpdatePage() const {
+  sendHtmlContent(server.get(), FirmwareUpdatePageHtml, sizeof(FirmwareUpdatePageHtml));
+  LOG_DBG("WEB", "Served firmware update page");
+}
+
+void PicoReadWebServer::handleFirmwareUpdateCheck() const {
+  OtaUpdater updater;
+  const auto res = updater.checkForUpdate();
+
+  JsonDocument doc;
+  doc["currentVersion"] = PICOREAD_VERSION;
+  doc["latestVersion"] = "";
+  doc["updateAvailable"] = false;
+  doc["error"] = "";
+
+  switch (res) {
+    case OtaUpdater::OK: {
+      doc["ok"] = true;
+      const bool newer = updater.isUpdateNewer();
+      doc["updateAvailable"] = newer;
+      doc["latestVersion"] = updater.getLatestVersion();
+
+      // Feed the home-screen badge too, same as an explicit Settings check.
+      std::lock_guard<std::mutex> stateLock(APP_STATE.getMutex());
+      APP_STATE.firmwareUpdateAvailable = newer;
+      APP_STATE.firmwareUpdateLatestVersion = updater.getLatestVersion();
+      break;
+    }
+    case OtaUpdater::NO_UPDATE:
+      // Latest release exists but has no firmware.bin asset - nothing installable,
+      // not a failure of the check itself.
+      doc["ok"] = true;
+      break;
+    default:
+      doc["ok"] = false;
+      doc["error"] = "Could not check GitHub for updates";
+      break;
+  }
+
+  String responseJson;
+  serializeJson(doc, responseJson);
+  server->send(200, "application/json", responseJson);
+}
+
+namespace {
+struct FirmwareInstallProgressCtx {
+  WebServer* server;
+  OtaUpdater* updater;
+  int lastPercent = -1;
+};
+
+// Matches OtaUpdater::ProgressCallback (a plain function pointer, not std::function -
+// keeps this off the heap, same constraint the render-loop callbacks follow).
+void firmwareInstallProgressTrampoline(void* ctxPtr) {
+  auto* ctx = static_cast<FirmwareInstallProgressCtx*>(ctxPtr);
+  if (ctx->updater->getTotalSize() == 0) return;
+  const int pct = static_cast<int>(static_cast<uint64_t>(ctx->updater->getProcessedSize()) * 100 /
+                                    ctx->updater->getTotalSize());
+  if (pct == ctx->lastPercent) return;
+  ctx->lastPercent = pct;
+
+  String line = "{\"status\":\"downloading\",\"percent\":";
+  line += pct;
+  line += ",\"message\":\"Downloading and flashing firmware... ";
+  line += pct;
+  line += "%\"}\n";
+  ctx->server->sendContent(line);
+}
+}  // namespace
+
+void PicoReadWebServer::handleFirmwareUpdateInstall() const {
+  // Streams newline-delimited JSON progress objects over a chunked response as the
+  // download/flash proceeds, so the page's progress bar can update live without
+  // polling. The client reads this via fetch()'s streaming response body.
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/x-ndjson", "");
+  server->sendContent("{\"status\":\"checking\"}\n");
+
+  OtaUpdater updater;
+  const auto checkRes = updater.checkForUpdate();
+  if (checkRes != OtaUpdater::OK || !updater.isUpdateNewer()) {
+    server->sendContent("{\"status\":\"error\",\"message\":\"No update available.\"}\n");
+    return;
+  }
+
+  FirmwareInstallProgressCtx ctx{server.get(), &updater};
+  const auto installRes = updater.installUpdate(firmwareInstallProgressTrampoline, &ctx);
+
+  if (installRes != OtaUpdater::OK) {
+    const char* message = installRes == OtaUpdater::CHECKSUM_ERROR
+                               ? "Firmware checksum mismatch (SHA256) - update aborted."
+                               : "Firmware install failed.";
+    String line = "{\"status\":\"error\",\"message\":\"";
+    line += message;
+    line += "\"}\n";
+    server->sendContent(line);
+    LOG_ERR("WEB", "Firmware update via web UI failed: %d", installRes);
+    return;
+  }
+
+  server->sendContent("{\"status\":\"done\"}\n");
+  LOG_INF("WEB", "Firmware update installed via web UI, restarting");
+  delay(500);  // let the final chunk reach the client before we reboot
+  ESP.restart();
 }

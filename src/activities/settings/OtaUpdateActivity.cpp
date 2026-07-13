@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "MappedInputManager.h"
+#include "PicoReadState.h"
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
@@ -34,6 +35,14 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
       state = FAILED;
     }
     return;
+  }
+
+  {
+    // Feed the home-screen badge too, so it stays in sync with an explicit manual
+    // check regardless of the outcome.
+    std::lock_guard<std::mutex> stateLock(APP_STATE.getMutex());
+    APP_STATE.firmwareUpdateAvailable = updater.isUpdateNewer();
+    APP_STATE.firmwareUpdateLatestVersion = updater.getLatestVersion();
   }
 
   if (!updater.isUpdateNewer()) {

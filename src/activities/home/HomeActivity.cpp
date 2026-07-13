@@ -234,8 +234,10 @@ void HomeActivity::render(RenderLock&&) {
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
   // Build menu items dynamically
+  const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),
-                                        tr(STR_FILE_TRANSFER), tr(STR_SETTINGS_TITLE)};
+                                        tr(STR_FILE_TRANSFER),
+                                        updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
   std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Transfer, Settings};
 
   if (hasOpdsServers) {

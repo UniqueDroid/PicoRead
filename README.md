@@ -73,11 +73,20 @@ USB port or browser before assuming the device is locked. Only reach for the unl
 
 ## Install firmware
 
-### Web installer
+### Web installer (recommended)
+
+1. Connect your device to your computer via USB-C and wake/unlock the device
+2. Go to https://uniquedroid.github.io/unique-esp-web-flasher and click "Install PicoRead" - a self-hosted [ESP Web Tools](https://github.com/esphome/esp-web-tools) flasher that always mirrors this repo's latest GitHub release, works for both a first flash and reflashing over an existing install.
+
+### Web installer (generic tool, manual .bin)
 
 1. Connect your device to your computer via USB-C and wake/unlock the device
 2. Download a `firmware.bin` from [Releases](https://github.com/UniqueDroid/PicoRead/releases), a local build, or a CI artifact.
 3. Go to https://crosspointreader.com/#flash-tools (the upstream project's generic web flasher, works for any compatible `.bin`), select device (X3 or X4), click "Custom .bin" and upload your PicoRead `firmware.bin`. There is no official PicoRead entry in that tool's release picker.
+
+### Already running PicoRead? Update over Wi-Fi
+
+No USB needed once you're on a PicoRead build: open the web menu (**File Transfer** on the device) and go to **Firmware Update**, or use **Settings > Check for Updates** on the device itself. Both check this repo's latest GitHub release, verify the download's SHA256 checksum before installing, and show progress while flashing.
 
 ### Revert to Official CrossPoint Firmware
 

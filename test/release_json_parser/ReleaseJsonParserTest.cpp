@@ -66,6 +66,7 @@ const char* kRealisticPretty = R"({
       "content_type": "application/octet-stream",
       "state": "uploaded",
       "size": 1572864,
+      "digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85",
       "download_count": 187,
       "created_at": "2026-04-28T10:16:00Z",
       "updated_at": "2026-04-28T10:16:45Z",
@@ -110,7 +111,7 @@ const char* kRealisticPretty = R"({
 })";
 
 const char* kRealisticMinified =
-    R"({"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345","assets_url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345/assets","id":12345,"author":{"login":"releasebot","id":99887766,"node_id":"MDQ6VXNlcjk5ODg3NzY2","type":"User","site_admin":false},"tag_name":"v2.4.1","target_commitish":"main","name":"PicoRead v2.4.1","draft":false,"prerelease":false,"assets":[{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100001","id":100001,"name":"picoread-reader-v2.4.1-source.zip","uploader":{"login":"releasebot","id":99887766},"content_type":"application/zip","state":"uploaded","size":2048576,"download_count":42,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/picoread-reader-v2.4.1-source.zip"},{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100002","id":100002,"name":"firmware.bin","uploader":{"login":"releasebot","id":99887766},"content_type":"application/octet-stream","state":"uploaded","size":1572864,"download_count":187,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/firmware.bin"},{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100003","id":100003,"name":"checksums.sha256","uploader":{"login":"releasebot","id":99887766},"content_type":"text/plain","state":"uploaded","size":192,"download_count":15,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/checksums.sha256"}],"body":"## What's Changed\n\n* Fixed orientation crash","reactions":{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345/reactions","total_count":5,"+1":3}})";
+    R"({"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345","assets_url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345/assets","id":12345,"author":{"login":"releasebot","id":99887766,"node_id":"MDQ6VXNlcjk5ODg3NzY2","type":"User","site_admin":false},"tag_name":"v2.4.1","target_commitish":"main","name":"PicoRead v2.4.1","draft":false,"prerelease":false,"assets":[{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100001","id":100001,"name":"picoread-reader-v2.4.1-source.zip","uploader":{"login":"releasebot","id":99887766},"content_type":"application/zip","state":"uploaded","size":2048576,"download_count":42,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/picoread-reader-v2.4.1-source.zip"},{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100002","id":100002,"name":"firmware.bin","uploader":{"login":"releasebot","id":99887766},"content_type":"application/octet-stream","state":"uploaded","size":1572864,"digest":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85","download_count":187,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/firmware.bin"},{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/assets/100003","id":100003,"name":"checksums.sha256","uploader":{"login":"releasebot","id":99887766},"content_type":"text/plain","state":"uploaded","size":192,"download_count":15,"browser_download_url":"https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/checksums.sha256"}],"body":"## What's Changed\n\n* Fixed orientation crash","reactions":{"url":"https://api.github.com/repos/UniqueDroid/PicoRead/releases/12345/reactions","total_count":5,"+1":3}})";
 
 void feedChunked(ReleaseJsonParser& p, const char* json, size_t chunkSize) {
   size_t len = strlen(json);
@@ -132,6 +133,7 @@ TEST(ReleaseJsonParser, RealisticPrettyPrinted) {
   EXPECT_STREQ(p.getFirmwareUrl(),
                "https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/firmware.bin");
   EXPECT_EQ(p.getFirmwareSize(), 1572864u);
+  EXPECT_STREQ(p.getFirmwareDigest(), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85");
 }
 
 TEST(ReleaseJsonParser, RealisticMinified) {
@@ -144,6 +146,7 @@ TEST(ReleaseJsonParser, RealisticMinified) {
   EXPECT_STREQ(p.getFirmwareUrl(),
                "https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/firmware.bin");
   EXPECT_EQ(p.getFirmwareSize(), 1572864u);
+  EXPECT_STREQ(p.getFirmwareDigest(), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85");
 }
 
 TEST(ReleaseJsonParser, PrettyAndMinifiedAgree) {
@@ -161,6 +164,41 @@ TEST(ReleaseJsonParser, PrettyAndMinifiedAgree) {
   EXPECT_STREQ(pretty.getTagName(), minified.getTagName());
   EXPECT_STREQ(pretty.getFirmwareUrl(), minified.getFirmwareUrl());
   EXPECT_EQ(pretty.getFirmwareSize(), minified.getFirmwareSize());
+  EXPECT_STREQ(pretty.getFirmwareDigest(), minified.getFirmwareDigest());
+}
+
+TEST(ReleaseJsonParser, MissingDigestField) {
+  // Older releases (published before GitHub added asset digests) omit the field entirely.
+  const char* json =
+      R"({"tag_name":"v1.0","assets":[{"name":"firmware.bin","browser_download_url":"https://fw","size":100}]})";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  EXPECT_TRUE(p.foundFirmware());
+  EXPECT_STREQ(p.getFirmwareDigest(), "");
+}
+
+TEST(ReleaseJsonParser, NullDigestField) {
+  const char* json =
+      R"({"tag_name":"v1.0","assets":[{"name":"firmware.bin","browser_download_url":"https://fw","size":100,"digest":null}]})";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  EXPECT_TRUE(p.foundFirmware());
+  EXPECT_STREQ(p.getFirmwareDigest(), "");
+}
+
+TEST(ReleaseJsonParser, DigestBeforeOtherFields) {
+  const char* json =
+      R"({"tag_name":"v1.0","assets":[{"digest":"sha256:abc123","name":"firmware.bin","browser_download_url":"https://fw","size":100}]})";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  EXPECT_TRUE(p.foundFirmware());
+  EXPECT_STREQ(p.getFirmwareDigest(), "sha256:abc123");
 }
 
 TEST(ReleaseJsonParser, FirmwareNotFirstAsset) {
@@ -270,6 +308,7 @@ TEST(ReleaseJsonParser, ChunkedFeedingSmallChunks) {
   EXPECT_STREQ(p.getFirmwareUrl(),
                "https://github.com/UniqueDroid/PicoRead/releases/download/v2.4.1/firmware.bin");
   EXPECT_EQ(p.getFirmwareSize(), 1572864u);
+  EXPECT_STREQ(p.getFirmwareDigest(), "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85");
 }
 
 TEST(ReleaseJsonParser, ChunkedFeedingByteByByte) {

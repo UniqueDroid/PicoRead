@@ -6,6 +6,8 @@ class OtaUpdater {
   bool updateAvailable = false;
   std::string latestVersion;
   std::string otaUrl;
+  // "sha256:<hex>" from GitHub's release asset digest, empty if the API didn't provide one.
+  std::string otaDigest;
   size_t otaSize = 0;
   size_t processedSize = 0;
   size_t totalSize = 0;
@@ -21,6 +23,7 @@ class OtaUpdater {
     UPDATE_OLDER_ERROR,
     INTERNAL_UPDATE_ERROR,
     OOM_ERROR,
+    CHECKSUM_ERROR,
   };
 
   size_t getOtaSize() const { return otaSize; }
