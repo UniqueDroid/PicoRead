@@ -4,7 +4,7 @@ PicoRead is [DerJan](https://github.com/UniqueDroid)'s personal fork of [CrossPo
 
 **Now running on:** ESP32C3-based Xteink [X4](https://www.xteink.com/products/xteink-x4) and [X3](https://www.xteink.com/products/xteink-x3).
 
-![PicoRead running on Xteink device](/src/images/picoread_github_logo.png)
+![PicoRead running on Xteink device](/src/images/picoread_logo_github.png)
 
 > If you're planning to buy an Xteink device, consider purchasing an **X3/X4 Developer Edition** through https://crosspointreader.com. CrossPoint (the upstream project) receives a small share of each sale, helping fund development of the engine PicoRead is built on.
 
