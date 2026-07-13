@@ -9,7 +9,7 @@
 
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
-#include "CrossPointSettings.h"
+#include "PicoReadSettings.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
 #include "KOReaderSettingsActivity.h"
@@ -46,8 +46,8 @@ void SettingsActivity::rebuildSettingsLists() {
     } else if (setting.category == StrId::STR_CAT_READER) {
       readerSettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_CONTROLS) {
-      if (setting.valuePtr == &CrossPointSettings::pwrBtnFootnoteBack &&
-          SETTINGS.shortPwrBtn != CrossPointSettings::SHORT_PWRBTN::FOOTNOTES) {
+      if (setting.valuePtr == &PicoReadSettings::pwrBtnFootnoteBack &&
+          SETTINGS.shortPwrBtn != PicoReadSettings::SHORT_PWRBTN::FOOTNOTES) {
         continue;
       }
       controlsSettings.push_back(setting);
@@ -96,7 +96,7 @@ void SettingsActivity::onEnter() {
   selectedCategoryIndex = 0;
   selectedSettingIndex = 0;
   preserveQuickResumeTimeoutOn =
-      SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
+      SETTINGS.quickResumeSleepScreen == PicoReadSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
   quickResumeTimeoutAutoEnabled = false;
   syncQuickResumeTimeoutForSleepScreen(/*sleepScreenChanged=*/true, /*quickResumeTimeoutChanged=*/false);
 
@@ -191,8 +191,8 @@ void SettingsActivity::toggleCurrentSetting() {
   }
 
   const auto& setting = (*currentSettings)[selectedSetting];
-  const bool sleepScreenChanged = setting.valuePtr == &CrossPointSettings::sleepScreen;
-  const bool quickResumeTimeoutChanged = setting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
+  const bool sleepScreenChanged = setting.valuePtr == &PicoReadSettings::sleepScreen;
+  const bool quickResumeTimeoutChanged = setting.valuePtr == &PicoReadSettings::quickResumeSleepScreen;
 
   if (setting.nameId == StrId::STR_TIME_TO_SLEEP) {
     openSleepTimeoutPicker();
@@ -313,13 +313,13 @@ void SettingsActivity::toggleCurrentSetting() {
 void SettingsActivity::syncQuickResumeTimeoutForSleepScreen(bool sleepScreenChanged, bool quickResumeTimeoutChanged) {
   if (quickResumeTimeoutChanged) {
     preserveQuickResumeTimeoutOn =
-        SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
+        SETTINGS.quickResumeSleepScreen == PicoReadSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
     quickResumeTimeoutAutoEnabled = false;
   }
 
-  if (SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME) {
-    if (SETTINGS.quickResumeSleepScreen != CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT) {
-      SETTINGS.quickResumeSleepScreen = CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
+  if (SETTINGS.sleepScreen == PicoReadSettings::SLEEP_SCREEN_MODE::QUICK_RESUME) {
+    if (SETTINGS.quickResumeSleepScreen != PicoReadSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT) {
+      SETTINGS.quickResumeSleepScreen = PicoReadSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT;
       quickResumeTimeoutAutoEnabled = !preserveQuickResumeTimeoutOn;
     } else if (sleepScreenChanged && !preserveQuickResumeTimeoutOn) {
       quickResumeTimeoutAutoEnabled = true;
@@ -328,7 +328,7 @@ void SettingsActivity::syncQuickResumeTimeoutForSleepScreen(bool sleepScreenChan
   }
 
   if (sleepScreenChanged && quickResumeTimeoutAutoEnabled && !preserveQuickResumeTimeoutOn) {
-    SETTINGS.quickResumeSleepScreen = CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_NEVER;
+    SETTINGS.quickResumeSleepScreen = PicoReadSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_NEVER;
     quickResumeTimeoutAutoEnabled = false;
   }
 }
@@ -337,7 +337,7 @@ void SettingsActivity::openSleepTimeoutPicker() {
   startActivityForResult(
       std::make_unique<IntervalSelectionActivity>(
           renderer, mappedInput, "SleepTimeoutInterval", StrId::STR_TIME_TO_SLEEP, SETTINGS.sleepTimeoutMinutes,
-          CrossPointSettings::MIN_SLEEP_TIMEOUT_MINUTES, CrossPointSettings::MAX_SLEEP_TIMEOUT_MINUTES, 1, 5,
+          PicoReadSettings::MIN_SLEEP_TIMEOUT_MINUTES, PicoReadSettings::MAX_SLEEP_TIMEOUT_MINUTES, 1, 5,
           StrId::STR_SLEEP_TIMER_VALUE_FORMAT, false, true, StrId::STR_SLEEP_NEVER),
       [this](const ActivityResult& result) {
         if (!result.isCancelled) {
@@ -359,7 +359,7 @@ void SettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_SETTINGS_TITLE),
-                 CROSSPOINT_VERSION);
+                 PICOREAD_VERSION);
 
   std::vector<TabInfo> tabs;
   tabs.reserve(categoryCount);
@@ -396,7 +396,7 @@ void SettingsActivity::render(RenderLock&&) {
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
           if (setting.nameId == StrId::STR_TIME_TO_SLEEP) {
             char valueBuffer[32];
-            if (SETTINGS.sleepTimeoutMinutes >= CrossPointSettings::SLEEP_TIMEOUT_NEVER_MINUTES) {
+            if (SETTINGS.sleepTimeoutMinutes >= PicoReadSettings::SLEEP_TIMEOUT_NEVER_MINUTES) {
               valueText = tr(STR_SLEEP_NEVER);
             } else {
               snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_SLEEP_TIMER_VALUE_FORMAT),

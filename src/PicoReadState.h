@@ -3,11 +3,11 @@
 #include <mutex>
 #include <string>
 
-class CrossPointState {
+class PicoReadState {
   mutable std::mutex _mutex;
 
   // Static instance
-  static CrossPointState instance;
+  static PicoReadState instance;
 
  public:
   // Access the state mutex for protecting multi-field reads/writes from other cores.
@@ -28,10 +28,10 @@ class CrossPointState {
   bool isRecentSleep(uint16_t idx, uint8_t checkCount) const;
 
   void pushRecentSleep(uint16_t idx);
-  ~CrossPointState() = default;
+  ~PicoReadState() = default;
 
   // Get singleton instance
-  static CrossPointState& getInstance() { return instance; }
+  static PicoReadState& getInstance() { return instance; }
 
   bool saveToFile() const;
 
@@ -42,4 +42,4 @@ class CrossPointState {
 };
 
 // Helper macro to access settings
-#define APP_STATE CrossPointState::getInstance()
+#define APP_STATE PicoReadState::getInstance()

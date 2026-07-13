@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <string_view>
 
-#include "CrossPointSettings.h"
+#include "PicoReadSettings.h"
 
 namespace {
 constexpr size_t NAME_BUFFER_SIZE = 500;

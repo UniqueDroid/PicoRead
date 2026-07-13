@@ -5,7 +5,7 @@
 #include <ObfuscationUtils.h>
 
 bool PersistableStoreBase::writeDocToFile(const char* path, const JsonDocument& doc) {
-  Storage.mkdir("/.crosspoint");
+  Storage.mkdir("/.picoread");
   String json;
   serializeJson(doc, json);
   if (!Storage.writeFile(path, json)) {

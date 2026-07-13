@@ -1,4 +1,4 @@
-#include "CrossPointWebServer.h"
+#include "PicoReadWebServer.h"
 
 #include <ArduinoJson.h>
 #include <FsHelpers.h>
@@ -13,18 +13,23 @@
 #include <algorithm>
 #include <cctype>
 
-#include "CrossPointSettings.h"
+#include "PicoReadSettings.h"
+#include "DictionaryLibrary.h"
 #include "FontInstaller.h"
 #include "OpdsServerStore.h"
 #include "SdCardFontSystem.h"
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "WifiCredentialStore.h"
+#include "html/DictionariesPageHtml.generated.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
+#include "html/PdfToXtcPageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
+#include "html/js/pdf_minJs.generated.h"
+#include "html/js/pdf_worker_minJs.generated.h"
 #include "util/BookCacheUtils.h"
 
 namespace {
@@ -35,7 +40,7 @@ constexpr uint16_t UDP_PORTS[] = {54982, 48123, 39001, 44044, 59678};
 constexpr uint16_t LOCAL_UDP_PORT = 8134;
 
 // Static pointer for WebSocket callback (WebSocketsServer requires C-style callback)
-CrossPointWebServer* wsInstance = nullptr;
+PicoReadWebServer* wsInstance = nullptr;
 
 // WebSocket upload state
 HalFile wsUploadFile;
@@ -86,11 +91,11 @@ bool isProtectedItemName(const String& name) {
 // - HomePageHtml (from html/HomePage.html)
 // - FilesPageHeaderHtml (from html/FilesPageHeader.html)
 // - FilesPageFooterHtml (from html/FilesPageFooter.html)
-CrossPointWebServer::CrossPointWebServer() {}
+PicoReadWebServer::PicoReadWebServer() {}
 
-CrossPointWebServer::~CrossPointWebServer() { stop(); }
+PicoReadWebServer::~PicoReadWebServer() { stop(); }
 
-void CrossPointWebServer::begin() {
+void PicoReadWebServer::begin() {
   if (running) {
     LOG_DBG("WEB", "Web server already running");
     return;
@@ -137,6 +142,9 @@ void CrossPointWebServer::begin() {
   server->on("/", HTTP_GET, [this] { handleRoot(); });
   server->on("/files", HTTP_GET, [this] { handleFileList(); });
   server->on("/js/jszip.min.js", HTTP_GET, [this] { handleJszip(); });
+  server->on("/pdf-to-xtc", HTTP_GET, [this] { handlePdfToXtcPage(); });
+  server->on("/js/pdf.min.js", HTTP_GET, [this] { handlePdfJs(); });
+  server->on("/js/pdf.worker.min.js", HTTP_GET, [this] { handlePdfWorkerJs(); });
 
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
@@ -168,6 +176,10 @@ void CrossPointWebServer::begin() {
   server->on("/api/fonts/upload", HTTP_POST, [this] { handleFontUpload(); }, [this] { handleFontUploadData(); });
   server->on("/api/fonts/delete", HTTP_POST, [this] { handleFontDelete(); });
 
+  // Dictionary management endpoints (upload/delete reuse /mkdir, /upload, /delete)
+  server->on("/dictionaries", HTTP_GET, [this] { handleDictionariesPage(); });
+  server->on("/api/dictionaries", HTTP_GET, [this] { handleDictionaryList(); });
+
   // OPDS server endpoints
   server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
   server->on("/api/opds", HTTP_POST, [this] { handlePostOpdsServer(); });
@@ -192,7 +204,7 @@ void CrossPointWebServer::begin() {
   // Start WebSocket server for fast binary uploads
   LOG_DBG("WEB", "Starting WebSocket server on port %d...", wsPort);
   wsServer.reset(new WebSocketsServer(wsPort));
-  wsInstance = const_cast<CrossPointWebServer*>(this);
+  wsInstance = const_cast<PicoReadWebServer*>(this);
   wsServer->begin();
   wsServer->onEvent(wsEventCallback);
   LOG_DBG("WEB", "WebSocket server started");
@@ -210,7 +222,7 @@ void CrossPointWebServer::begin() {
   LOG_DBG("WEB", "[MEM] Free heap after server.begin(): %d bytes", ESP.getFreeHeap());
 }
 
-void CrossPointWebServer::abortWsUpload(const char* tag) {
+void PicoReadWebServer::abortWsUpload(const char* tag) {
   // Explicit close() required: file-scope global persists beyond function scope
   wsUploadFile.close();
   String filePath = wsUploadPath;
@@ -226,7 +238,7 @@ void CrossPointWebServer::abortWsUpload(const char* tag) {
   wsLastProgressSent = 0;
 }
 
-void CrossPointWebServer::stop() {
+void PicoReadWebServer::stop() {
   if (!running || !server) {
     LOG_DBG("WEB", "stop() called but already stopped (running=%d, server=%p)", running, server.get());
     return;
@@ -274,7 +286,7 @@ void CrossPointWebServer::stop() {
   LOG_DBG("WEB", "[MEM] Free heap final: %d bytes", ESP.getFreeHeap());
 }
 
-void CrossPointWebServer::handleClient() {
+void PicoReadWebServer::handleClient() {
   static unsigned long lastDebugPrint = 0;
 
   // Check running flag FIRST before accessing server
@@ -312,9 +324,9 @@ void CrossPointWebServer::handleClient() {
         if (strcmp(buffer, "hello") == 0) {
           String hostname = WiFi.getHostname();
           if (hostname.isEmpty()) {
-            hostname = "crosspoint";
+            hostname = "picoread";
           }
-          String message = "crosspoint (on " + hostname + ");" + String(wsPort);
+          String message = "picoread (on " + hostname + ");" + String(wsPort);
           udp.beginPacket(udp.remoteIP(), udp.remotePort());
           udp.write(reinterpret_cast<const uint8_t*>(message.c_str()), message.length());
           udp.endPacket();
@@ -324,7 +336,7 @@ void CrossPointWebServer::handleClient() {
   }
 }
 
-CrossPointWebServer::WsUploadStatus CrossPointWebServer::getWsUploadStatus() const {
+PicoReadWebServer::WsUploadStatus PicoReadWebServer::getWsUploadStatus() const {
   WsUploadStatus status;
   status.inProgress = wsUploadInProgress;
   status.received = wsUploadReceived;
@@ -341,18 +353,35 @@ static void sendHtmlContent(WebServer* server, const char* data, size_t len) {
   server->send_P(200, "text/html", data, len);
 }
 
-void CrossPointWebServer::handleRoot() const {
+void PicoReadWebServer::handleRoot() const {
   sendHtmlContent(server.get(), HomePageHtml, sizeof(HomePageHtml));
   LOG_DBG("WEB", "Served root page");
 }
 
-void CrossPointWebServer::handleJszip() const {
+void PicoReadWebServer::handlePdfToXtcPage() const {
+  sendHtmlContent(server.get(), PdfToXtcPageHtml, sizeof(PdfToXtcPageHtml));
+  LOG_DBG("WEB", "Served PDF-to-XTC page");
+}
+
+void PicoReadWebServer::handlePdfJs() const {
+  server->sendHeader("Content-Encoding", "gzip");
+  server->send_P(200, "application/javascript", pdf_minJs, pdf_minJsCompressedSize);
+  LOG_DBG("WEB", "Served pdf.min.js");
+}
+
+void PicoReadWebServer::handlePdfWorkerJs() const {
+  server->sendHeader("Content-Encoding", "gzip");
+  server->send_P(200, "application/javascript", pdf_worker_minJs, pdf_worker_minJsCompressedSize);
+  LOG_DBG("WEB", "Served pdf.worker.min.js");
+}
+
+void PicoReadWebServer::handleJszip() const {
   server->sendHeader("Content-Encoding", "gzip");
   server->send_P(200, "application/javascript", jszip_minJs, jszip_minJsCompressedSize);
   LOG_DBG("WEB", "Served jszip.min.js");
 }
 
-void CrossPointWebServer::handleNotFound() const {
+void PicoReadWebServer::handleNotFound() const {
   // in AP mode, redirect unmatched browser/captive-portal requests to "/" so the OS auto-opens the browser
   // API requests (/api/*) still return 404 so XHR errors surface correctly
   // see https://en.wikipedia.org/wiki/Captive_portal#Detection
@@ -367,12 +396,12 @@ void CrossPointWebServer::handleNotFound() const {
   server->send(404, "text/plain", message);
 }
 
-void CrossPointWebServer::handleStatus() const {
+void PicoReadWebServer::handleStatus() const {
   // Get correct IP based on AP vs STA mode
   const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
 
   JsonDocument doc;
-  doc["version"] = CROSSPOINT_VERSION;
+  doc["version"] = PICOREAD_VERSION;
   doc["ip"] = ipAddr;
   doc["mode"] = apMode ? "AP" : "STA";
   doc["rssi"] = apMode ? 0 : WiFi.RSSI();
@@ -403,7 +432,7 @@ void CrossPointWebServer::handleStatus() const {
   server->send(200, "application/json", response);
 }
 
-void CrossPointWebServer::scanFiles(const char* path, const std::function<void(FileInfo)>& callback) const {
+void PicoReadWebServer::scanFiles(const char* path, const std::function<void(FileInfo)>& callback) const {
   HalFile root = Storage.open(path);
   if (!root) {
     LOG_DBG("WEB", "Failed to open directory: %s", path);
@@ -461,13 +490,13 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
   root.close();
 }
 
-bool CrossPointWebServer::isEpubFile(const String& filename) const { return FsHelpers::hasEpubExtension(filename); }
+bool PicoReadWebServer::isEpubFile(const String& filename) const { return FsHelpers::hasEpubExtension(filename); }
 
-void CrossPointWebServer::handleFileList() const {
+void PicoReadWebServer::handleFileList() const {
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
 }
 
-void CrossPointWebServer::handleFileListData() const {
+void PicoReadWebServer::handleFileListData() const {
   // Get current path from query string (default to root)
   String currentPath = "/";
   if (server->hasArg("path")) {
@@ -517,7 +546,7 @@ void CrossPointWebServer::handleFileListData() const {
   LOG_DBG("WEB", "Served file listing page for path: %s", currentPath.c_str());
 }
 
-void CrossPointWebServer::handleDownload() const {
+void PicoReadWebServer::handleDownload() const {
   if (!server->hasArg("path")) {
     server->send(400, "text/plain", "Missing path");
     return;
@@ -604,7 +633,7 @@ static unsigned long uploadStartTime = 0;
 static unsigned long totalWriteTime = 0;
 static size_t writeCount = 0;
 
-static bool flushUploadBuffer(CrossPointWebServer::UploadState& state) {
+static bool flushUploadBuffer(PicoReadWebServer::UploadState& state) {
   if (state.bufferPos > 0 && state.file) {
     esp_task_wdt_reset();  // Reset watchdog before potentially slow SD write
     const unsigned long writeStart = millis();
@@ -623,7 +652,7 @@ static bool flushUploadBuffer(CrossPointWebServer::UploadState& state) {
   return true;
 }
 
-void CrossPointWebServer::handleUpload(UploadState& state) const {
+void PicoReadWebServer::handleUpload(UploadState& state) const {
   static size_t lastLoggedSize = 0;
 
   // Reset watchdog at start of every upload callback - HTTP parsing can be slow
@@ -771,7 +800,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
   }
 }
 
-void CrossPointWebServer::handleUploadPost(UploadState& state) const {
+void PicoReadWebServer::handleUploadPost(UploadState& state) const {
   if (state.success) {
     server->send(200, "text/plain", "File uploaded successfully: " + state.fileName);
   } else {
@@ -780,7 +809,7 @@ void CrossPointWebServer::handleUploadPost(UploadState& state) const {
   }
 }
 
-void CrossPointWebServer::handleCreateFolder() const {
+void PicoReadWebServer::handleCreateFolder() const {
   // Get folder name from form data
   if (!server->hasArg("name")) {
     server->send(400, "text/plain", "Missing folder name");
@@ -830,7 +859,7 @@ void CrossPointWebServer::handleCreateFolder() const {
   }
 }
 
-void CrossPointWebServer::handleRename() const {
+void PicoReadWebServer::handleRename() const {
   if (!server->hasArg("path") || !server->hasArg("name")) {
     server->send(400, "text/plain", "Missing path or new name");
     return;
@@ -912,7 +941,7 @@ void CrossPointWebServer::handleRename() const {
   }
 }
 
-void CrossPointWebServer::handleMove() const {
+void PicoReadWebServer::handleMove() const {
   if (!server->hasArg("path") || !server->hasArg("dest")) {
     server->send(400, "text/plain", "Missing path or destination");
     return;
@@ -1005,7 +1034,7 @@ void CrossPointWebServer::handleMove() const {
   }
 }
 
-void CrossPointWebServer::handleDelete() const {
+void PicoReadWebServer::handleDelete() const {
   // To ensure backwards compatibility, plain `path` is mapped
   // to a single element JSON array.
   bool hasPathArg = server->hasArg("path");
@@ -1127,12 +1156,12 @@ void CrossPointWebServer::handleDelete() const {
   }
 }
 
-void CrossPointWebServer::handleSettingsPage() const {
+void PicoReadWebServer::handleSettingsPage() const {
   sendHtmlContent(server.get(), SettingsPageHtml, sizeof(SettingsPageHtml));
   LOG_DBG("WEB", "Served settings page");
 }
 
-void CrossPointWebServer::handleGetSettings() const {
+void PicoReadWebServer::handleGetSettings() const {
   // Pass the SD font registry so the fontFamily setting's enumStringValues
   // includes SD-resident families — otherwise the web API only exposes the
   // three built-in fonts.
@@ -1224,7 +1253,7 @@ void CrossPointWebServer::handleGetSettings() const {
   LOG_DBG("WEB", "Served settings API");
 }
 
-void CrossPointWebServer::handlePostSettings() {
+void PicoReadWebServer::handlePostSettings() {
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1303,7 +1332,7 @@ void CrossPointWebServer::handlePostSettings() {
 
 // ---- OPDS Server API ----
 
-void CrossPointWebServer::handleGetOpdsServers() const {
+void PicoReadWebServer::handleGetOpdsServers() const {
   const auto& servers = OPDS_STORE.getServers();
 
   // Stream JSON array incrementally to avoid allocating the full response in memory
@@ -1336,7 +1365,7 @@ void CrossPointWebServer::handleGetOpdsServers() const {
   LOG_DBG("WEB", "Served OPDS servers API (%zu servers)", servers.size());
 }
 
-void CrossPointWebServer::handlePostOpdsServer() {
+void PicoReadWebServer::handlePostOpdsServer() {
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1387,7 +1416,7 @@ void CrossPointWebServer::handlePostOpdsServer() {
 }
 
 // Uses POST (not HTTP DELETE) because ESP32 WebServer doesn't support DELETE with body.
-void CrossPointWebServer::handleDeleteOpdsServer() {
+void PicoReadWebServer::handleDeleteOpdsServer() {
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1419,7 +1448,7 @@ void CrossPointWebServer::handleDeleteOpdsServer() {
 
 // ---- Wi-Fi Credentials API ----
 
-void CrossPointWebServer::handleGetWifiNetworks() const {
+void PicoReadWebServer::handleGetWifiNetworks() const {
   const auto& credentials = WIFI_STORE.getCredentials();
   const std::string& lastConnectedSsid = WIFI_STORE.getLastConnectedSsid();
 
@@ -1452,7 +1481,7 @@ void CrossPointWebServer::handleGetWifiNetworks() const {
   LOG_DBG("WEB", "Served Wi-Fi credentials API (%zu network(s))", credentials.size());
 }
 
-void CrossPointWebServer::handlePostWifiNetwork() {
+void PicoReadWebServer::handlePostWifiNetwork() {
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1515,7 +1544,7 @@ void CrossPointWebServer::handlePostWifiNetwork() {
 }
 
 // Uses POST (not HTTP DELETE) because ESP32 WebServer doesn't support DELETE with body.
-void CrossPointWebServer::handleDeleteWifiNetwork() {
+void PicoReadWebServer::handleDeleteWifiNetwork() {
   if (!server->hasArg("plain")) {
     server->send(400, "text/plain", "Missing JSON body");
     return;
@@ -1552,7 +1581,7 @@ void CrossPointWebServer::handleDeleteWifiNetwork() {
 }
 
 // WebSocket callback trampoline
-void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+void PicoReadWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   if (wsInstance) {
     wsInstance->onWebSocketEvent(num, type, payload, length);
   }
@@ -1564,7 +1593,7 @@ void CrossPointWebServer::wsEventCallback(uint8_t num, WStype_t type, uint8_t* p
 //   2. Client sends BINARY messages with file data chunks
 //   3. Server sends TEXT "PROGRESS:<received>:<total>" after each chunk
 //   4. Server sends TEXT "DONE" or "ERROR:<message>" when complete
-void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
+void PicoReadWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       LOG_DBG("WS", "Client %u disconnected", num);
@@ -1740,12 +1769,12 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
 
 // --- Font management handlers ---
 
-void CrossPointWebServer::handleFontsPage() const {
+void PicoReadWebServer::handleFontsPage() const {
   sendHtmlContent(server.get(), FontsPageHtml, sizeof(FontsPageHtml));
   LOG_DBG("WEB", "Served fonts page");
 }
 
-void CrossPointWebServer::handleFontList() const {
+void PicoReadWebServer::handleFontList() const {
   // Pick up any uploads/deletes that happened since the last reader load.
   const_cast<SdCardFontSystem&>(sdFontSystem).refreshIfDirty();
   const auto& families = sdFontSystem.registry().getFamilies();
@@ -1786,7 +1815,7 @@ void CrossPointWebServer::handleFontList() const {
   server->send(200, "application/json", json);
 }
 
-void CrossPointWebServer::handleFontUploadData() {
+void PicoReadWebServer::handleFontUploadData() {
   HTTPUpload& upload = server->upload();
 
   switch (upload.status) {
@@ -1810,7 +1839,7 @@ void CrossPointWebServer::handleFontUploadData() {
       filename.replace(' ', '_');
       // Validate filename: rejects path traversal (../, /, \) and enforces
       // a .cpfont basename of alphanumeric + hyphen + underscore. Without
-      // this an attacker could supply "../../.crosspoint/settings.json" as
+      // this an attacker could supply "../../.picoread/settings.json" as
       // a "filename" and have it written outside the fonts directory.
       if (!FontInstaller::isValidCpfontFilename(filename.c_str())) {
         LOG_ERR("WEB", "Invalid font filename: %s", filename.c_str());
@@ -1908,7 +1937,7 @@ void CrossPointWebServer::handleFontUploadData() {
   }
 }
 
-void CrossPointWebServer::handleFontUpload() {
+void PicoReadWebServer::handleFontUpload() {
   if (fontUpload.valid) {
     sdFontSystem.markRegistryDirty();
     server->send(200, "application/json", "{\"ok\":true}");
@@ -1918,7 +1947,7 @@ void CrossPointWebServer::handleFontUpload() {
   }
 }
 
-void CrossPointWebServer::handleFontDelete() {
+void PicoReadWebServer::handleFontDelete() {
   String body = server->arg("plain");
   JsonDocument doc;
   DeserializationError err = deserializeJson(doc, body);
@@ -1940,4 +1969,25 @@ void CrossPointWebServer::handleFontDelete() {
     server->send(500, "application/json", "{\"error\":\"Delete failed\"}");
     LOG_ERR("WEB", "Failed to delete font family: %s", familyName);
   }
+}
+
+void PicoReadWebServer::handleDictionariesPage() const {
+  sendHtmlContent(server.get(), DictionariesPageHtml, sizeof(DictionariesPageHtml));
+  LOG_DBG("WEB", "Served dictionaries page");
+}
+
+void PicoReadWebServer::handleDictionaryList() const {
+  JsonDocument doc;
+  JsonArray arr = doc["dictionaries"].to<JsonArray>();
+
+  for (const auto& listing : DictionaryLibrary::listInstalled()) {
+    JsonObject dObj = arr.add<JsonObject>();
+    dObj["id"] = listing.id;
+    dObj["bookName"] = listing.meta.bookName;
+    dObj["wordCount"] = listing.meta.wordCount;
+  }
+
+  String responseJson;
+  serializeJson(doc, responseJson);
+  server->send(200, "application/json", responseJson);
 }

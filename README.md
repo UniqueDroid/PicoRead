@@ -1,20 +1,24 @@
-# CrossPoint Reader
+# PicoRead
 
-[![Fund contributors](https://img.shields.io/badge/%F0%9F%91%91_Fund_contributors-royalty.dev-BB953A?style=for-the-badge&labelColor=1a1a1a)](https://app.royalty.dev/crosspoint-reader/crosspoint-reader)
-
-CrossPoint is open-source e-reader firmware - community-built, fully hackable, free forever. It's maintained by a growing community of developers and readers who believe your device should do what you want - not what a manufacturer decided for you.
+PicoRead is [Jan](https://github.com/UniqueDroid)'s personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader), an open-source, fully hackable e-reader firmware. All credit for the original engine, architecture, and design goes to the upstream CrossPoint Reader project — see [Credits](#credits) below. This fork adds Jan's own experiments on top of that foundation and isn't affiliated with the upstream project or its maintainers.
 
 **Now running on:** ESP32C3-based Xteink [X4](https://www.xteink.com/products/xteink-x4) and [X3](https://www.xteink.com/products/xteink-x3).
 
-![CrossPoint Reader running on Xteink device](./docs/images/cover.jpg)
+![PicoRead running on Xteink device](./docs/images/cover.jpg)
 
-> If you're planning to buy an Xteink device, consider purchasing an **X3/X4 Developer Edition** through https://crosspointreader.com. CrossPoint receives a small share of each sale, helping fund development costs.
+> If you're planning to buy an Xteink device, consider purchasing an **X3/X4 Developer Edition** through https://crosspointreader.com. CrossPoint (the upstream project) receives a small share of each sale, helping fund development of the engine PicoRead is built on.
 
-## What can CrossPoint do?
+## What can PicoRead do?
 
 - **Reader engine**: EPUB 2/3 rendering with embedded-style option, image handling, hyphenation, kerning, chapter navigation, footnotes, bookmarks, go-to-percent, auto page turn, orientation control, focus reading, KOReader progress sync and more. 
 
 - **Various formats**: native handling for `.epub`, `.xtc/.xtch`, `.txt`, and `.bmp`.
+
+- **PDF support (PicoRead-only)**: convert PDFs to `.xtc` image pages right from the web UI (`/pdf-to-xtc`) — no reflow, but readable as a comic/image-style book.
+
+- **Dictionary lookup (PicoRead-only)**: inline word lookup in the reader menu, using installed FreeDict dictionaries.
+
+- **Cross-book bookmarks (PicoRead-only)**: a "Bookmarks" tile on the home screen jumps straight into any bookmarked spot across your recent books.
 
 - **Screenshots.**
 
@@ -42,8 +46,6 @@ CrossPoint is open-source e-reader firmware - community-built, fully hackable, f
 
 ### Coming soon:
 
-- Dictionary lookup — inline word lookup without leaving the reader.
-
 - More themes.
 
 - Much more! stay tuned.
@@ -53,8 +55,8 @@ CrossPoint is open-source e-reader firmware - community-built, fully hackable, f
 ## USB-locked devices (Xteink Unlocker)
 
 Some Xteink units purchased from third-party stores (e.g. AliExpress) ship with USB flashing locked from the factory.
-If your device is locked, you will need to use the **Xteink Unlocker** tool available at
-https://crosspointreader.com/#unlock-tool before you can flash CrossPoint.
+If your device is locked, you will need to use the **Xteink Unlocker** tool (from the upstream CrossPoint project) available at
+https://crosspointreader.com/#unlock-tool before you can flash PicoRead.
 
 **You do not need this tool if you bought your device directly from xteink.com.** Those units are not locked.
 
@@ -64,7 +66,8 @@ USB port or browser before assuming the device is locked. Only reach for the unl
 
 > ### ⚠️ WARNING: READ THIS BEFORE USING THE UNLOCKER ⚠️
 > 
-> **The only officially supported firmwares in the unlock tool are CrossPoint and CrossInk.**
+> **The only officially supported firmwares in that unlock tool are CrossPoint and CrossInk — PicoRead is not listed there.**
+> Use the "Custom .bin" upload option instead (see below) to flash a PicoRead build once the device is unlocked.
 > 
 > Flashing any other firmware on a USB-locked device may **permanently brick the device** or leave it **permanently
 > stuck on that firmware with no recovery path**. Once USB flashing is re-locked, your only way back is via OTA, and if
@@ -72,20 +75,15 @@ USB port or browser before assuming the device is locked. Only reach for the unl
 
 ## Install firmware
 
-### Web installer (recommended)
+### Web installer
 
 1. Connect your device to your computer via USB-C and wake/unlock the device
-2. Go to https://crosspointreader.com/#flash-tools, select device (X3 or X4), and choose an official CrossPoint release.
+2. Download a `firmware.bin` from [Releases](https://github.com/UniqueDroid/PicoRead/releases), a local build, or a CI artifact.
+3. Go to https://crosspointreader.com/#flash-tools (the upstream project's generic web flasher, works for any compatible `.bin`), select device (X3 or X4), click "Custom .bin" and upload your PicoRead `firmware.bin`. There is no official PicoRead entry in that tool's release picker.
 
-### Web installer (specific version)
+### Revert to Official CrossPoint Firmware
 
-1. Connect your device to your computer via USB-C and wake/unlock the device
-2. Download a `firmware.bin` from [Releases](https://github.com/crosspoint-reader/crosspoint-reader/releases), local build, or continuous integration artifact.
-3. Go to https://crosspointreader.com/#flash-tools, select device (X3 or X4), click "Custom .bin" and upload a `firmware.bin`.
-
-### Revert to Official Firmware
-
-To revert to the official firmware, you can also flash the latest official firmware using https://crosspointreader.com/#flash-tools.
+To go back to the official upstream firmware, flash the latest official CrossPoint release using https://crosspointreader.com/#flash-tools.
 
 ### Command line
 
@@ -95,7 +93,7 @@ To revert to the official firmware, you can also flash the latest official firmw
 pip install esptool
 ```
 
-2. Download `firmware.bin` from the [releases page](https://github.com/crosspoint-reader/crosspoint-reader/releases).
+2. Download `firmware.bin` from the [releases page](https://github.com/UniqueDroid/PicoRead/releases).
 3. Connect your device via USB-C.
 4. Find the device port. On Linux, run `dmesg` after connecting. On macOS:
 
@@ -121,7 +119,7 @@ See [Development quick start](#development-quick-start) below.
 
 Convert your own TTF/OTF files into `.cpfont` files that load from the SD card. No firmware reflash is needed.
 
-1. Go to https://crosspointreader.com/fonts and open the "SD-card font builder" form.
+1. Go to https://crosspointreader.com/fonts (the upstream project's font builder tool — output is a generic `.cpfont` format, works for PicoRead too) and open the "SD-card font builder" form.
 2. Upload up to four styles (regular, bold, italic, bold-italic), set the family name, point sizes, and Unicode range.
 3. Download the generated `.cpfont` files.
 4. Copy them to your SD card under `/fonts/YourFont/` (or `/.fonts/YourFont/` to hide the folder).
@@ -153,8 +151,8 @@ Conversion runs the firmware repo's `lib/EpdFont/scripts/fontconvert_sdcard.py` 
 ### Setup
 
 ```bash
-git clone --recursive https://github.com/crosspoint-reader/crosspoint-reader
-cd crosspoint-reader
+git clone --recursive https://github.com/UniqueDroid/PicoRead
+cd PicoRead
 
 # if cloned without --recursive:
 git submodule update --init --recursive
@@ -201,15 +199,15 @@ Minor adjustments may be required for Windows.
 
 ## Internals
 
-CrossPoint Reader is pretty aggressive about caching data down to the SD card to minimise RAM usage. The ESP32-C3 only has ~380KB of usable RAM, so we have to be careful. A lot of the decisions made in the design of the firmware were based on this constraint.
+PicoRead is pretty aggressive about caching data down to the SD card to minimise RAM usage. The ESP32-C3 only has ~380KB of usable RAM, so we have to be careful. A lot of the decisions made in the design of the firmware were based on this constraint.
 
 ### Data caching
 
 The first time chapters of a book are loaded, they are cached to the SD card. Subsequent loads are served from the
-cache. This cache directory exists at `.crosspoint` on the SD card. The structure is as follows:
+cache. This cache directory exists at `.picoread` on the SD card. The structure is as follows:
 
 ```text
-.crosspoint/
+.picoread/
 ├── epub_<hash>/         # one directory per book, named by content hash
 │   ├── progress.bin     # reading position (chapter, page, etc.)
 │   ├── cover.bmp        # generated cover image
@@ -225,7 +223,7 @@ cache. This cache directory exists at `.crosspoint` on the SD card. The structur
 └── recent.json          # recent books list
 ```
 
-Removing `/.crosspoint` clears all cached metadata and forces a full regeneration on next open. Book deletes, overwrites, and moves done through the firmware or web UI clear or re-key matching caches; manual SD-card edits may leave stale cache directories behind.
+Removing `/.picoread` clears all cached metadata and forces a full regeneration on next open. Book deletes, overwrites, and moves done through the firmware or web UI clear or re-key matching caches; manual SD-card edits may leave stale cache directories behind.
 
 For more details on the internal file structures, see the [file formats document](./docs/file-formats.md).
 
@@ -233,15 +231,13 @@ For more details on the internal file structures, see the [file formats document
 
 ## Contributing
 
-Contributions are welcome. If you're new to the codebase, start with the [contributing docs](./docs/contributing/README.md). For things to work on, check the [ideas discussion board](https://github.com/crosspoint-reader/crosspoint-reader/discussions/categories/ideas) — leave a comment before starting so we don't duplicate effort.
-
-Everyone here is a volunteer, so please be respectful and patient. For governance and community expectations, see [GOVERNANCE.md](./GOVERNANCE.md).
+This is Jan's personal fork, so day-to-day development happens solo. If you're curious about the codebase, the [contributing docs](./docs/contributing/README.md) (inherited from upstream) still apply architecturally. For the general CrossPoint Reader project itself, check the upstream [ideas discussion board](https://github.com/crosspoint-reader/crosspoint-reader/discussions/categories/ideas).
 
 ---
 
 ## Community forks
 
-One of the best things about open source is that anyone can take the code in a different direction. If you need something outside CrossPoint's [scope](./SCOPE.md), check out the community forks:
+One of the best things about open source is that anyone can take the code in a different direction. If you need something outside PicoRead's [scope](./SCOPE.md), check out the community forks:
 
 - [CrossInk](https://github.com/uxjulia/CrossInk) — Typography and reading tracking: Bionic Reading (bolds word stems to create fixation points), guide dots between words, improved paragraph indents, and replaces the default fonts with ChareInk/Lexend/Bitter.
 
@@ -255,16 +251,22 @@ One of the best things about open source is that anyone can take the code in a d
 
 - ~~[PlusPoint](https://github.com/ngxson/pluspoint-reader) — custom JS apps support.~~ (Unmaintained)
 
-- [crosspoint-reader-papers3](https://github.com/juicecultus/crosspoint-reader-papers3) — Crosspoint port for M5Stack Paper S3. 
+- [crosspoint-reader-papers3](https://github.com/juicecultus/crosspoint-reader-papers3) — CrossPoint port for M5Stack Paper S3.
 
-- [t5s3-reader](https://github.com/ShallowGreen123/t5s3-reader) — Crosspoint port for LilyGo T5 ePaper S3 / T5S3 4.7-inch e-paper device.
-
-**Note:** Many of these features will make their way into CrossPoint over time. We maintain a slower pace to ensure rock-solid stability and squash bugs before they reach your device.
+- [t5s3-reader](https://github.com/ShallowGreen123/t5s3-reader) — CrossPoint port for LilyGo T5 ePaper S3 / T5S3 4.7-inch e-paper device.
 
 Want to build your own device? Be sure to check out the [de-link](https://github.com/iandchasse/de-link) project.
 
 ---
 
-CrossPoint Reader is **not affiliated with Xteink or any device manufacturer**.
+## Credits
 
-Huge shoutout to [diy-esp32-epub-reader](https://github.com/atomic14/diy-esp32-epub-reader), which inspired this project.
+PicoRead is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) by Dave Allie and contributors, licensed under MIT (see [LICENSE](./LICENSE)). All credit for the original reader engine, activity architecture, HAL, and the huge amount of design work behind it goes to that upstream project — go star it and, if you can, [support the original maintainers](https://app.royalty.dev/crosspoint-reader/crosspoint-reader).
+
+What's different in this fork so far: a PDF-to-XTC converter, cross-book bookmarks, and offline dictionary lookup (see [What can PicoRead do?](#what-can-picoread-do) above).
+
+---
+
+PicoRead is **not affiliated with Xteink or any device manufacturer**, nor with the upstream CrossPoint Reader project or its maintainers.
+
+Huge shoutout to [diy-esp32-epub-reader](https://github.com/atomic14/diy-esp32-epub-reader), which inspired the original CrossPoint project.

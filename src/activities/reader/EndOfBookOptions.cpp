@@ -4,7 +4,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
-#include "CrossPointSettings.h"
+#include "PicoReadSettings.h"
 #include "ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -63,7 +63,7 @@ EndOfBookOptions::Action EndOfBookOptions::handleMenuInput(const MappedInputMana
   // configured, same rule as ReaderUtils::detectPageTurn). This matters on entry: with
   // press-triggered turns, the press that turned the final page already fired in the
   // reader, and its release must not double-fire into this menu.
-  const bool usePress = SETTINGS.longPressButtonBehavior == CrossPointSettings::OFF;
+  const bool usePress = SETTINGS.longPressButtonBehavior == PicoReadSettings::OFF;
   const auto triggered = [&](const MappedInputManager::Button button) {
     return usePress ? input.wasPressed(button) : input.wasReleased(button);
   };

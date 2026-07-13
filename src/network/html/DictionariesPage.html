@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PicoRead - Dictionaries</title>
+    <style>
+      :root {
+        --font-color: #333;
+        --bg: #f5f5f5;
+        --title-color: #2c3e50;
+        --card-bg: #FFF;
+        --label-color: #7f8c8d;
+        --border-color: #eee;
+        --accent-color: rgb(110, 154, 130);
+        --accent-hover-color: #5a8c73;
+        --danger-color: #e74c3c;
+        --danger-hover: #c0392b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --font-color: #f5f5f5;
+          --bg: #333;
+          --title-color: #ecf0f1;
+          --card-bg: #444;
+          --label-color: #bdc3c7;
+          --border-color: #555;
+          color-scheme: dark;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--bg);
+        color: var(--font-color);
+      }
+      h1 {
+        color: var(--title-color);
+        border-bottom: 2px solid var(--accent-color);
+        padding-bottom: 10px;
+      }
+      h2 { color: var(--title-color); margin-top: 0; }
+      h3 { margin: 0 0 8px 0; }
+      .card {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .nav-links {
+        margin: 20px 0;
+        display: flex;
+        gap: 10px;
+      }
+      .nav-links a {
+        padding: 10px 20px;
+        color: var(--font-color);
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .nav-links a.active {
+        background-color: var(--accent-color);
+        color: white;
+      }
+      .nav-links a:not(.active):hover {
+        background-color: var(--accent-hover-color);
+        color: white;
+      }
+      .dict-row {
+        border-bottom: 1px solid var(--border-color);
+        padding: 12px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .dict-row:last-child { border-bottom: none; }
+      .dict-info { flex: 1; }
+      .dict-meta { color: var(--label-color); font-size: 0.9em; }
+      .btn {
+        padding: 6px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+      }
+      .btn-danger { background: var(--danger-color); color: white; }
+      .btn-danger:hover { background: var(--danger-hover); }
+      .btn-primary { background: var(--accent-color); color: white; }
+      .btn-primary:hover { background: var(--accent-hover-color); }
+      .upload-form input[type="file"] { width: 100%; margin: 8px 0; }
+      #status {
+        margin-top: 10px;
+        padding: 8px;
+        border-radius: 4px;
+        display: none;
+      }
+      .status-ok { background: #d4edda; color: #155724; display: block !important; }
+      .status-err { background: #f8d7da; color: #721c24; display: block !important; }
+      .empty { color: var(--label-color); text-align: center; padding: 20px; }
+      .hint { color: var(--label-color); font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <h1>📚 PicoRead</h1>
+
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/files">File Manager</a>
+      <a href="/settings">Settings</a>
+      <a href="/fonts">Fonts</a>
+      <a href="/pdf-to-xtc">PDF &rarr; XTC</a>
+      <a href="/dictionaries" class="active">Dictionaries</a>
+    </div>
+
+    <div class="card">
+      <h2>Installed Dictionaries</h2>
+      <div id="dictList"><p class="empty">Loading...</p></div>
+    </div>
+
+    <div class="card">
+      <h2>Add Dictionary</h2>
+      <p class="hint">
+        Select the output folder produced by
+        <code>lib/Dictionary/scripts/convert_freedict.py</code> (contains
+        <code>dict.json</code>, <code>index.didx</code>, <code>entries.dict</code>).
+        The folder name becomes the dictionary's ID.
+      </p>
+      <form class="upload-form" id="uploadForm">
+        <input type="file" id="dictFiles" webkitdirectory directory multiple required />
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </form>
+      <p id="pickedInfo" class="dict-meta"></p>
+      <div id="status"></div>
+    </div>
+
+  <script>
+    const REQUIRED_FILES = ['dict.json', 'index.didx', 'entries.dict'];
+
+    function folderIdFromFiles(files) {
+      // webkitRelativePath looks like "eng-deu/dict.json" - the folder name
+      // is the dictionary ID, matching how convert_freedict.py named its
+      // output directory.
+      const first = files[0];
+      const rel = first.webkitRelativePath || first.name;
+      return rel.split('/')[0];
+    }
+
+    function findRequiredFiles(fileList) {
+      const byName = {};
+      for (const f of fileList) {
+        byName[f.name] = f;
+      }
+      const missing = REQUIRED_FILES.filter(name => !byName[name]);
+      return { byName, missing };
+    }
+
+    async function loadDictionaries() {
+      const el = document.getElementById('dictList');
+      try {
+        const res = await fetch('/api/dictionaries');
+        const data = await res.json();
+        el.replaceChildren();
+        if (!data.dictionaries || data.dictionaries.length === 0) {
+          const p = document.createElement('p');
+          p.className = 'empty';
+          p.textContent = 'No dictionaries installed';
+          el.appendChild(p);
+          return;
+        }
+        for (const d of data.dictionaries) {
+          const row = document.createElement('div');
+          row.className = 'dict-row';
+
+          const info = document.createElement('div');
+          info.className = 'dict-info';
+          const h3 = document.createElement('h3');
+          h3.textContent = d.bookName;
+          info.appendChild(h3);
+          const meta = document.createElement('span');
+          meta.className = 'dict-meta';
+          meta.textContent = d.id + ' · ' + d.wordCount.toLocaleString() + ' words';
+          info.appendChild(meta);
+
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-danger';
+          btn.textContent = 'Delete';
+          const dictId = d.id;
+          btn.addEventListener('click', () => deleteDictionary(dictId));
+
+          row.appendChild(info);
+          row.appendChild(btn);
+          el.appendChild(row);
+        }
+      } catch (e) {
+        el.replaceChildren();
+        const p = document.createElement('p');
+        p.className = 'empty';
+        p.textContent = 'Failed to load dictionary list';
+        el.appendChild(p);
+      }
+    }
+
+    async function deleteDictionary(id) {
+      if (!confirm('Delete dictionary "' + id + '"? This cannot be undone.')) return;
+      const status = document.getElementById('status');
+      status.className = '';
+      status.style.display = 'block';
+      status.textContent = 'Deleting ' + id + '...';
+      try {
+        const base = '/dictionaries/' + id;
+        const filePaths = REQUIRED_FILES.map(name => base + '/' + name);
+        // /delete requires a folder to be empty before it can be removed -
+        // delete the files first, then the now-empty folder.
+        await fetch('/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'paths=' + encodeURIComponent(JSON.stringify(filePaths)),
+        });
+        await fetch('/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'path=' + encodeURIComponent(base),
+        });
+        status.className = 'status-ok';
+        status.textContent = 'Deleted "' + id + '".';
+      } catch (err) {
+        status.className = 'status-err';
+        status.textContent = 'Failed to delete "' + id + '": ' + err.message;
+      }
+      await loadDictionaries();
+    }
+
+    function mkdir(path, name) {
+      const formData = new FormData();
+      formData.append('path', path);
+      formData.append('name', name);
+      return fetch('/mkdir', { method: 'POST', body: formData });
+    }
+
+    function uploadFile(path, file) {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      return fetch('/upload?path=' + encodeURIComponent(path), { method: 'POST', body: formData });
+    }
+
+    document.getElementById('dictFiles').addEventListener('change', function () {
+      const info = document.getElementById('pickedInfo');
+      if (this.files.length === 0) {
+        info.textContent = '';
+        return;
+      }
+      const id = folderIdFromFiles(this.files);
+      const { missing } = findRequiredFiles(this.files);
+      if (missing.length > 0) {
+        info.textContent = 'Selected "' + id + '" - missing: ' + missing.join(', ');
+      } else {
+        info.textContent = 'Ready to upload as "' + id + '"';
+      }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const status = document.getElementById('status');
+      const fileList = document.getElementById('dictFiles').files;
+      if (fileList.length === 0) {
+        status.className = 'status-err';
+        status.style.display = 'block';
+        status.textContent = 'No folder selected.';
+        return;
+      }
+
+      const id = folderIdFromFiles(fileList);
+      const { byName, missing } = findRequiredFiles(fileList);
+      if (missing.length > 0) {
+        status.className = 'status-err';
+        status.style.display = 'block';
+        status.textContent = 'Missing required file(s): ' + missing.join(', ');
+        return;
+      }
+
+      status.className = '';
+      status.style.display = 'block';
+
+      try {
+        status.textContent = 'Creating /dictionaries...';
+        await mkdir('/', 'dictionaries');
+        status.textContent = 'Creating /dictionaries/' + id + '...';
+        await mkdir('/dictionaries', id);
+
+        const destPath = '/dictionaries/' + id;
+        for (const name of REQUIRED_FILES) {
+          status.textContent = 'Uploading ' + name + '...';
+          const res = await uploadFile(destPath, byName[name]);
+          if (!res.ok) {
+            throw new Error(name + ': ' + (await res.text()));
+          }
+        }
+
+        status.className = 'status-ok';
+        status.textContent = 'Installed dictionary "' + id + '".';
+      } catch (err) {
+        status.className = 'status-err';
+        status.textContent = 'Upload failed: ' + err.message;
+      }
+      await loadDictionaries();
+    });
+
+    loadDictionaries();
+  </script>
+  </body>
+</html>

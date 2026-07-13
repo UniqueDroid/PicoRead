@@ -147,5 +147,5 @@ class EpubReaderActivity final : public Activity {
   bool skipLoopDelay() override { return section && section->isBuilding(); }
   bool isReaderActivity() const override { return true; }
   ScreenshotInfo getScreenshotInfo() const override;
-  CrossPointPosition getCurrentPosition() const;
+  PicoReadPosition getCurrentPosition() const;
 };

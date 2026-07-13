@@ -1,4 +1,4 @@
-#include "CrossPointState.h"
+#include "PicoReadState.h"
 
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
@@ -10,14 +10,14 @@
 
 namespace {
 constexpr uint8_t STATE_FILE_VERSION = 4;
-constexpr char STATE_FILE_BIN[] = "/.crosspoint/state.bin";
-constexpr char STATE_FILE_JSON[] = "/.crosspoint/state.json";
-constexpr char STATE_FILE_BAK[] = "/.crosspoint/state.bin.bak";
+constexpr char STATE_FILE_BIN[] = "/.picoread/state.bin";
+constexpr char STATE_FILE_JSON[] = "/.picoread/state.json";
+constexpr char STATE_FILE_BAK[] = "/.picoread/state.bin.bak";
 }  // namespace
 
-CrossPointState CrossPointState::instance;
+PicoReadState PicoReadState::instance;
 
-bool CrossPointState::isRecentSleep(uint16_t idx, uint8_t checkCount) const {
+bool PicoReadState::isRecentSleep(uint16_t idx, uint8_t checkCount) const {
   const uint8_t effectiveCount = std::min(checkCount, recentSleepFill);
   for (uint8_t i = 0; i < effectiveCount; i++) {
     const uint8_t slot = (recentSleepPos + SLEEP_RECENT_COUNT - 1 - i) % SLEEP_RECENT_COUNT;
@@ -26,19 +26,19 @@ bool CrossPointState::isRecentSleep(uint16_t idx, uint8_t checkCount) const {
   return false;
 }
 
-void CrossPointState::pushRecentSleep(uint16_t idx) {
+void PicoReadState::pushRecentSleep(uint16_t idx) {
   recentSleepImages[recentSleepPos] = idx;
   recentSleepPos = (recentSleepPos + 1) % SLEEP_RECENT_COUNT;
   if (recentSleepFill < SLEEP_RECENT_COUNT) recentSleepFill++;
 }
 
-bool CrossPointState::saveToFile() const {
+bool PicoReadState::saveToFile() const {
   std::lock_guard<std::mutex> lock(_mutex);
-  Storage.mkdir("/.crosspoint");
+  Storage.mkdir("/.picoread");
   return JsonSettingsIO::saveState(*this, STATE_FILE_JSON);
 }
 
-bool CrossPointState::loadFromFile() {
+bool PicoReadState::loadFromFile() {
   // Try JSON first
   if (Storage.exists(STATE_FILE_JSON)) {
     String json = Storage.readFile(STATE_FILE_JSON);
@@ -65,7 +65,7 @@ bool CrossPointState::loadFromFile() {
   return false;
 }
 
-bool CrossPointState::loadFromBinaryFile() {
+bool PicoReadState::loadFromBinaryFile() {
   HalFile inputFile;
   if (!Storage.openFileForRead("CPS", STATE_FILE_BIN, inputFile)) {
     return false;

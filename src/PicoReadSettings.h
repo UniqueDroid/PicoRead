@@ -5,20 +5,20 @@
 #include <iosfwd>
 #include <mutex>
 
-class CrossPointSettings {
+class PicoReadSettings {
  private:
   mutable std::mutex _mutex;
 
   // Private constructor for singleton
-  CrossPointSettings() = default;
+  PicoReadSettings() = default;
 
   // Static instance
-  static CrossPointSettings instance;
+  static PicoReadSettings instance;
 
  public:
   // Delete copy constructor and assignment
-  CrossPointSettings(const CrossPointSettings&) = delete;
-  CrossPointSettings& operator=(const CrossPointSettings&) = delete;
+  PicoReadSettings(const PicoReadSettings&) = delete;
+  PicoReadSettings& operator=(const PicoReadSettings&) = delete;
 
   // Access the settings mutex for protecting multi-field reads/writes from other cores.
   // Callers must not re-enter SETTINGS methods that lock _mutex while holding it.
@@ -272,10 +272,10 @@ class CrossPointSettings {
   // Quick Resume: keep current content visible with moon icon instead of showing a static sleep screen.
   uint8_t quickResumeSleepScreen = QUICK_RESUME_NEVER;
 
-  ~CrossPointSettings() = default;
+  ~PicoReadSettings() = default;
 
   // Get singleton instance
-  static CrossPointSettings& getInstance() { return instance; }
+  static PicoReadSettings& getInstance() { return instance; }
 
   static constexpr uint8_t MIN_SLEEP_TIMEOUT_MINUTES = 1;
   static constexpr uint8_t SLEEP_TIMEOUT_NEVER_MINUTES = 31;
@@ -288,7 +288,7 @@ class CrossPointSettings {
   void* sdFontResolverCtx = nullptr;
 
   uint16_t getPowerButtonDuration() const {
-    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
+    return (shortPwrBtn == PicoReadSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
   }
   int getReaderFontId() const;
 
@@ -298,7 +298,7 @@ class CrossPointSettings {
   bool saveToFile() const;
   bool loadFromFile();
 
-  static void validateFrontButtonMapping(CrossPointSettings& settings);
+  static void validateFrontButtonMapping(PicoReadSettings& settings);
   static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
 
  private:
@@ -312,4 +312,4 @@ class CrossPointSettings {
 };
 
 // Helper macro to access settings
-#define SETTINGS CrossPointSettings::getInstance()
+#define SETTINGS PicoReadSettings::getInstance()

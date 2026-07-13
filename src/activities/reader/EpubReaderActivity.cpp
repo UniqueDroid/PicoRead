@@ -13,13 +13,16 @@
 #include <esp_system.h>
 
 #include <algorithm>
+#include <cctype>
 #include <functional>
 #include <iterator>
 #include <limits>
 
 #include "BookmarkEntry.h"
-#include "CrossPointSettings.h"
-#include "CrossPointState.h"
+#include "PicoReadSettings.h"
+#include "PicoReadState.h"
+#include "DictionaryLibrary.h"
+#include "DictionaryLookupActivity.h"
 #include "EpubReaderBookmarksActivity.h"
 #include "EpubReaderChapterSelectionActivity.h"
 #include "EpubReaderFootnotesActivity.h"
@@ -130,7 +133,7 @@ void moveFinishedBookToReadFolder(const std::string& srcPath, const std::string&
   }
 
   // Cache dir is keyed by hash of the epub path (see Epub ctor), so it must be re-keyed.
-  const std::string newCachePath = "/.crosspoint/epub_" + std::to_string(std::hash<std::string>{}(dstPath));
+  const std::string newCachePath = "/.picoread/epub_" + std::to_string(std::hash<std::string>{}(dstPath));
   if (!oldCachePath.empty() && Storage.exists(oldCachePath.c_str())) {
     if (!Storage.rename(oldCachePath.c_str(), newCachePath.c_str())) {
       LOG_ERR("ERS", "Failed to rename cache dir %s -> %s (non-fatal)", oldCachePath.c_str(), newCachePath.c_str());
@@ -243,9 +246,15 @@ void EpubReaderActivity::openReaderMenu() {
     bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
   }
   const int bookProgressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
+  // Dictionary menu entry only needs to know whether ANY dictionary is
+  // installed - which words are on the current page is resolved on demand
+  // (getTextFromSectionFile(), same as the QR display) only if the user
+  // actually opens the Dictionary action, not on every menu render.
+  const bool hasDictionary = !DictionaryLibrary::listInstalled().empty();
   startActivityForResult(std::make_unique<EpubReaderMenuActivity>(
                              renderer, mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-                             SETTINGS.orientation, !currentPageFootnotes.empty(), !cachedBookmarks.empty()),
+                             SETTINGS.orientation, !currentPageFootnotes.empty(), !cachedBookmarks.empty(),
+                             hasDictionary),
                          [this](const ActivityResult& result) {
                            // Always apply orientation change even if the menu was cancelled
                            const auto& menu = std::get<MenuResult>(result.data);
@@ -422,7 +431,7 @@ void EpubReaderActivity::loop() {
   // Long-press Confirm runs the user-selected function (SETTINGS.longPressMenuFunction).
   if (mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
     switch (SETTINGS.longPressMenuFunction) {
-      case CrossPointSettings::LP_MENU_BOOKMARK:
+      case PicoReadSettings::LP_MENU_BOOKMARK:
         // Hold ~0.4s drops a bookmark at the current page.
         if (mappedInput.getHeldTime() >= ReaderUtils::BOOKMARK_HOLD_MS && !showBookmarkMessage) {
           addBookmark();
@@ -432,7 +441,7 @@ void EpubReaderActivity::loop() {
           requestUpdate();
         }
         break;
-      case CrossPointSettings::LP_MENU_KOSYNC:
+      case PicoReadSettings::LP_MENU_KOSYNC:
         // Hold ~1s launches KOReader sync. If sync can't run (no credentials stored), fall
         // through so the normal Confirm-release still opens the reader menu.
         if (mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
@@ -442,7 +451,7 @@ void EpubReaderActivity::loop() {
           }
         }
         break;
-      case CrossPointSettings::LP_MENU_DISABLED:
+      case PicoReadSettings::LP_MENU_DISABLED:
       default:
         break;
     }
@@ -468,7 +477,7 @@ void EpubReaderActivity::loop() {
   // auto [prevTriggered, nextTriggered] = ReaderUtils::detectPageTurn(mappedInput);
 
   // Handle short power button press for footnotes
-  if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES &&
+  if (SETTINGS.shortPwrBtn == PicoReadSettings::SHORT_PWRBTN::FOOTNOTES &&
       mappedInput.wasReleased(MappedInputManager::Button::Power) &&
       !mappedInput.wasReleased(MappedInputManager::Button::Down)) {
     if (footnoteDepth > 0) {
@@ -643,8 +652,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
 
       if (!cachedPageMatchesActiveSection && sync.hasSavedProgress) {
         const int totalPages = section ? section->estimatedTotalPages() : cachedChapterTotalPageCount;
-        CrossPointPosition fallback =
-            ProgressMapper::toCrossPoint(epub, {sync.xpath, sync.percentage}, renderer, currentSpineIndex, totalPages);
+        PicoReadPosition fallback =
+            ProgressMapper::toPicoRead(epub, {sync.xpath, sync.percentage}, renderer, currentSpineIndex, totalPages);
         targetSpineIndex = fallback.spineIndex;
         targetPage = fallback.pageNumber;
       }
@@ -697,6 +706,47 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                }
                                requestUpdate();
                              });
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::DICTIONARY: {
+      const auto installed = DictionaryLibrary::listInstalled();
+      if (installed.empty() || !section) {
+        requestUpdate();
+        break;
+      }
+      const std::string dictionaryId = DictionaryLibrary::pickBestDictionaryId(installed, epub->getLanguage());
+
+      // Reuses the same on-demand page-text extraction as DISPLAY_QR above -
+      // not cached per page render, since most reads never open Dictionary.
+      const std::string pageText = section->getTextFromSectionFile();
+      std::vector<std::string> pageWords;
+      std::vector<std::string> seenLower;
+      pageWords.reserve(64);
+      size_t start = 0;
+      while (start <= pageText.size()) {
+        const size_t sp = pageText.find(' ', start);
+        std::string word = pageText.substr(start, sp == std::string::npos ? std::string::npos : sp - start);
+        // Trim leading/trailing punctuation (quotes, sentence-ending marks)
+        // but keep internal apostrophes/hyphens ("don't", "well-known").
+        size_t first = word.find_first_not_of(".,;:!?\"'()[]{}<>“”‘’");
+        size_t last = word.find_last_not_of(".,;:!?\"'()[]{}<>“”‘’");
+        if (first != std::string::npos && last != std::string::npos && last >= first) {
+          word = word.substr(first, last - first + 1);
+          std::string lower = word;
+          std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+          if (!word.empty() && std::find(seenLower.begin(), seenLower.end(), lower) == seenLower.end() &&
+              pageWords.size() < 500) {
+            seenLower.push_back(lower);
+            pageWords.push_back(word);
+          }
+        }
+        if (sp == std::string::npos) break;
+        start = sp + 1;
+      }
+
+      startActivityForResult(
+          std::make_unique<DictionaryLookupActivity>(renderer, mappedInput, std::move(pageWords), dictionaryId),
+          [this](const ActivityResult&) { requestUpdate(); });
       break;
     }
     case EpubReaderMenuActivity::MenuAction::GO_TO_PERCENT: {
@@ -790,7 +840,7 @@ bool EpubReaderActivity::launchKOReaderSync() {
   }
 
   // Pre-compute local KO position and chapter name while Epub is still in RAM.
-  CrossPointPosition localPos = getCurrentPosition();
+  PicoReadPosition localPos = getCurrentPosition();
   SavedProgressPosition localKoPos = ProgressMapper::toSavedProgress(epub, localPos);
   const int tocIdx = epub->getTocIndexForSpineIndex(currentSpineIndex);
   std::string localChapterName = (tocIdx >= 0) ? epub->getTocItem(tocIdx).title : "";
@@ -1531,7 +1581,7 @@ void EpubReaderActivity::renderStatusBar() const {
       textYOffset += UITheme::getInstance().getMetrics().statusBarVerticalMargin;
     }
 
-  } else if (SETTINGS.statusBarTitle == CrossPointSettings::STATUS_BAR_TITLE::CHAPTER_TITLE) {
+  } else if (SETTINGS.statusBarTitle == PicoReadSettings::STATUS_BAR_TITLE::CHAPTER_TITLE) {
     title = tr(STR_UNNAMED);
     const int tocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
     if (tocIndex != -1) {
@@ -1539,7 +1589,7 @@ void EpubReaderActivity::renderStatusBar() const {
       title = tocItem.title;
     }
 
-  } else if (SETTINGS.statusBarTitle == CrossPointSettings::STATUS_BAR_TITLE::BOOK_TITLE) {
+  } else if (SETTINGS.statusBarTitle == PicoReadSettings::STATUS_BAR_TITLE::BOOK_TITLE) {
     title = epub->getTitle();
   }
 
@@ -1712,7 +1762,7 @@ ScreenshotInfo EpubReaderActivity::getScreenshotInfo() const {
   return info;
 }
 
-CrossPointPosition EpubReaderActivity::getCurrentPosition() const {
+PicoReadPosition EpubReaderActivity::getCurrentPosition() const {
   const int currentPage = section ? section->currentPage : nextPageNumber;
   const int totalPages = section ? section->estimatedTotalPages() : cachedChapterTotalPageCount;
   std::optional<uint16_t> paragraphIndex;
@@ -1724,7 +1774,7 @@ CrossPointPosition EpubReaderActivity::getCurrentPosition() const {
     }
   }
 
-  CrossPointPosition localPos = {currentSpineIndex, currentPage, totalPages};
+  PicoReadPosition localPos = {currentSpineIndex, currentPage, totalPages};
   if (paragraphIndex.has_value()) {
     localPos.paragraphIndex = *paragraphIndex;
     localPos.hasParagraphIndex = true;

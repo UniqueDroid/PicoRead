@@ -1,0 +1,69 @@
+# Dictionary Library
+
+On-device offline word lookup for PicoRead's Dictionary feature.
+
+## Why not use StarDict's own .idx directly
+
+StarDict (the format most free dictionaries, including FreeDict, ship in)
+stores its index as variable-length records: `[word bytes][0x00][4-byte
+offset][4-byte length]`, sorted case-insensitively. That variable length
+rules out a random-access binary search on a RAM-constrained device: seeking
+to an arbitrary byte offset can land inside the binary offset/length
+fields (which legitimately contain 0x00 bytes) and misparse them as a word
+terminator. The alternative - loading the whole index into RAM - doesn't
+fit either (FreeDict's English-German index alone is ~10MB; the ESP32-C3
+has ~380KB total).
+
+This library instead reads a small custom fixed-width index
+(`convert_freedict.py` produces it from a source StarDict dictionary), so
+every record lives at `recordIndex * RECORD_SIZE` and binary search is a
+plain seek - no resync heuristics, no full-index RAM load.
+
+## On-device format
+
+A dictionary is a folder (e.g. `/dictionaries/eng-deu/`) containing:
+
+| File | Contents |
+|------|----------|
+| `dict.json` | `{"bookName": "...", "wordCount": N, "isHtml": true}` |
+| `index.didx` | Sorted, fixed-width binary index (see below) |
+| `entries.dict` | Raw definition text/HTML, copied through unchanged from the source StarDict `.dict` file |
+
+### index.didx record layout (56 bytes each, `wordCount` records)
+
+```text
+[0..47]  word, UTF-8, NUL-padded (48-byte slot; words longer than this are
+         dropped by the converter - see "Known limitations")
+[48..51] uint32, little-endian: byte offset into entries.dict
+[52..55] uint32, little-endian: byte length of the definition at that offset
+```
+
+Records are sorted case-insensitively (ASCII fold only - see limitations)
+by word, ascending - this is inherited from the source StarDict index and
+preserved as-is by the converter (dropping some records doesn't disturb
+the order of the rest).
+
+## Known limitations (accepted for v1)
+
+- **ASCII-only case folding.** Lookups fold `A-Z` to `a-z` before
+  comparing; accented letters (a German umlaut's uppercase/lowercase form,
+  for instance) are compared byte-for-byte. This matches the overwhelming
+  majority of real lookups (the reader only ever looks up one plain word
+  at a time) and avoids pulling in a full Unicode case-folding table.
+- **Words longer than 48 bytes are dropped**, not truncated - truncating
+  would risk two different long entries colliding in the index. In
+  practice these are virtually all full example-sentence "headwords" some
+  Ding/FreeDict entries carry, never realistic targets for a single-word
+  lookup UI (verified against the real eng-deu data: <0.001% of genuine
+  single-word entries exceed 48 bytes).
+
+## Producing a dictionary
+
+```bash
+python3 lib/Dictionary/scripts/convert_freedict.py <extracted-freedict-dir> <output-dir>
+```
+
+`<extracted-freedict-dir>` is a FreeDict "stardict" release, untarred (e.g.
+`freedict-eng-deu-*.stardict.tar.xz`). Upload the resulting
+`dict.json`/`index.didx`/`entries.dict` trio via the web menu's
+Dictionaries page.

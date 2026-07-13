@@ -4,7 +4,7 @@ Import("env")
 
 
 PROJECT_DIR = Path(env.subst("$PROJECT_DIR"))
-MARKER = "/* CrossPoint wolfSSL compatibility overrides */"
+MARKER = "/* PicoRead wolfSSL compatibility overrides */"
 OVERRIDES = f"""
 
 {MARKER}
