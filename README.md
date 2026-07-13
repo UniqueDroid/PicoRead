@@ -1,10 +1,10 @@
 # PicoRead
 
-PicoRead is [Jan](https://github.com/UniqueDroid)'s personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader), an open-source, fully hackable e-reader firmware. All credit for the original engine, architecture, and design goes to the upstream CrossPoint Reader project — see [Credits](#credits) below. This fork adds Jan's own experiments on top of that foundation and isn't affiliated with the upstream project or its maintainers.
+PicoRead is [DerJan](https://github.com/UniqueDroid)'s personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader), an open-source, fully hackable e-reader firmware. All credit for the original engine, architecture, and design goes to the upstream CrossPoint Reader project — see [Credits](#credits) below. This fork adds DerJan's own experiments on top of that foundation and isn't affiliated with the upstream project or its maintainers.
 
 **Now running on:** ESP32C3-based Xteink [X4](https://www.xteink.com/products/xteink-x4) and [X3](https://www.xteink.com/products/xteink-x3).
 
-![PicoRead running on Xteink device](./docs/images/cover.jpg)
+![PicoRead running on Xteink device](./src/images/picoread_github_logo.png)
 
 > If you're planning to buy an Xteink device, consider purchasing an **X3/X4 Developer Edition** through https://crosspointreader.com. CrossPoint (the upstream project) receives a small share of each sale, helping fund development of the engine PicoRead is built on.
 
