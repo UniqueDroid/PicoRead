@@ -1631,6 +1631,19 @@
               </label>
             </div>
           </div>
+          <!-- Strip Embedded Fonts -->
+          <div class="advanced-setting-row">
+            <div class="setting-label">
+              <div class="setting-title">🔤 Strip Embedded Fonts</div>
+              <div class="setting-desc">Remove bundled TTF/OTF/WOFF files - the reader always uses its own built-in fonts</div>
+            </div>
+            <div class="setting-controls">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fontStripToggle" checked onchange="updateQualitySettings()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
           <!-- Target Device -->
           <div class="advanced-setting-row" id="deviceSettingRow">
             <div class="setting-title">📱 Target Device</div>
@@ -2092,6 +2105,7 @@
     JPEG_QUALITY = 85;
     HANDEDNESS = 'right';
     OVERLAP_PERCENT = 5;
+    ENABLE_FONT_STRIP = DEFAULT_ENABLE_FONT_STRIP;
     imageStates = {};
 
     // Hide convert options when opening modal (no files selected initially)
@@ -2190,6 +2204,8 @@
     document.getElementById('qualityInput').value = 85;
     const autoCropToggle = document.getElementById('autoCropToggle');
     if (autoCropToggle) autoCropToggle.checked = false;
+    const fontStripToggle = document.getElementById('fontStripToggle');
+    if (fontStripToggle) fontStripToggle.checked = DEFAULT_ENABLE_FONT_STRIP;
     setHandedness('right');
     setOverlap(5);
     // Update converter variables
@@ -2280,6 +2296,7 @@
   function updateQualitySettings() {
     const quality = document.getElementById('qualitySlider').value;
     const autoCropToggle = document.getElementById('autoCropToggle');
+    const fontStripToggle = document.getElementById('fontStripToggle');
 
     // Update displays (if element exists)
     const qualityDisplay = document.getElementById('qualityDisplaySimple');
@@ -2291,6 +2308,7 @@
     JPEG_QUALITY = parseInt(quality, 10);
     ENABLE_GRAYSCALE = true; // Always grayscale for e-ink
     ENABLE_AUTO_CROP = autoCropToggle ? autoCropToggle.checked : false;
+    ENABLE_FONT_STRIP = fontStripToggle ? fontStripToggle.checked : true;
     if (isImagePickerVisible()) {
       renderImageGrid();
     }
@@ -3284,6 +3302,9 @@ const DEFAULT_JPEG_QUALITY = 85;
 const DEFAULT_ENABLE_GRAYSCALE = true;
 const DEFAULT_ENABLE_AUTO_CROP = false;
 // Auto-crop is opt-in because sparse title/logo pages can be zoomed aggressively.
+const DEFAULT_ENABLE_FONT_STRIP = true;
+// Font-strip defaults on: @font-face is never parsed by the reader (see CssParser.h),
+// so bundled TTF/OTF/WOFF files are always dead weight, never a rendering risk.
 const CROP_WHITE_THRESHOLD = 245;
 const CROP_BACKGROUND_TOLERANCE = 28;
 const CROP_BACKGROUND_MAX_SPREAD = 24;
@@ -3303,6 +3324,7 @@ let MAX_HEIGHT = DEFAULT_MAX_HEIGHT;
 let JPEG_QUALITY = DEFAULT_JPEG_QUALITY;
 let ENABLE_GRAYSCALE = DEFAULT_ENABLE_GRAYSCALE;
 let ENABLE_AUTO_CROP = DEFAULT_ENABLE_AUTO_CROP;
+let ENABLE_FONT_STRIP = DEFAULT_ENABLE_FONT_STRIP;
 let HANDEDNESS = 'right'; // 'right' = clockwise (right-handed), 'left' = counter-clockwise (left-handed)
 let OVERLAP_PERCENT = 5; // Minimum overlap percentage for splits (5%, 10%, 15%)
 
@@ -3320,7 +3342,7 @@ let pendingConversionFile = null;  // File awaiting conversion after image selec
 // ============================================================================
 
 let logStartTime = null;
-let conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0 };
+let conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0, fontsStripped: 0, fontBytesSaved: 0 };
 const logSection = document.getElementById('log-section');
 const logContainer = document.getElementById('log-container');
 const exportLogCheckbox = document.getElementById('export-log-checkbox');
@@ -3509,6 +3531,7 @@ function logSummary(originalSize, newSize, timeElapsed) {
         <tr><td>Images found</td><td class="highlight">${totalImages}</td></tr>
         <tr><td>Images processed</td><td>${totalOutput}${conversionStats.splitParts > conversionStats.splits ? ` (+${conversionStats.splitParts - conversionStats.splits} from splits)` : ''}</td></tr>
         <tr><td>EPUB repairs</td><td>${conversionStats.fixes > 0 ? conversionStats.fixes + ' fixes applied' : 'None needed'}</td></tr>
+        ${conversionStats.fontsStripped > 0 ? `<tr><td>Fonts stripped</td><td>${conversionStats.fontsStripped} (${formatBytes(conversionStats.fontBytesSaved)})</td></tr>` : ''}
         ${conversionStats.errors > 0 ? `<tr><td>Errors</td><td style="color:#e74c3c">${conversionStats.errors}</td></tr>` : ''}
         <tr><td>Original size</td><td>${formatBytes(originalSize)}</td></tr>
         <tr><td>Optimized size</td><td>${formatBytes(newSize)}</td></tr>
@@ -3525,7 +3548,7 @@ function logSummary(originalSize, newSize, timeElapsed) {
 function clearLog() {
   logContainer.innerHTML = '';
   logStartTime = Date.now();
-  conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0 };
+  conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0, fontsStripped: 0, fontBytesSaved: 0 };
 }
 
 // Start batch logging mode
@@ -3533,7 +3556,7 @@ function startBatchLog(fileCount) {
   isBatchMode = true;
   batchStartTime = Date.now();
   batchLogEntries = [];
-  batchStats = { filesProcessed: 0, filesSucceeded: 0, filesFailed: 0, totalImages: 0, totalSplits: 0, totalFixes: 0, totalErrors: 0, totalOriginalSize: 0, totalNewSize: 0 };
+  batchStats = { filesProcessed: 0, filesSucceeded: 0, filesFailed: 0, totalImages: 0, totalSplits: 0, totalFixes: 0, totalErrors: 0, totalOriginalSize: 0, totalNewSize: 0, totalFontsStripped: 0 };
   clearLog();
   logContainer.innerHTML = ''; // Clear display
   log(`Starting batch conversion: ${fileCount} file(s)`, '', 'INFO');
@@ -3562,6 +3585,7 @@ function saveToFileBatchLog(fileName, succeeded, originalSize = 0, newSize = 0) 
   batchStats.totalSplits += conversionStats.splits;
   batchStats.totalFixes += conversionStats.fixes;
   batchStats.totalErrors += conversionStats.errors;
+  batchStats.totalFontsStripped += conversionStats.fontsStripped;
   // Defaults of 0 keep failure-path callers safe — files that never
   // produced a converted blob contribute nothing to the totals.
   batchStats.totalOriginalSize += originalSize;
@@ -3569,7 +3593,7 @@ function saveToFileBatchLog(fileName, succeeded, originalSize = 0, newSize = 0) 
 
   // Clear for next file
   logContainer.innerHTML = '';
-  conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0 };
+  conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0, fontsStripped: 0, fontBytesSaved: 0 };
 }
 
 // Finalize batch log and export
@@ -3625,6 +3649,7 @@ function finalizeBatchLog() {
         <tr><td>Total images processed</td><td>${batchStats.totalImages}</td></tr>
         <tr><td>Total splits</td><td>${batchStats.totalSplits}</td></tr>
         <tr><td>Total fixes applied</td><td>${batchStats.totalFixes}</td></tr>
+        ${batchStats.totalFontsStripped > 0 ? `<tr><td>Total fonts stripped</td><td>${batchStats.totalFontsStripped}</td></tr>` : ''}
         ${batchStats.totalErrors > 0 ? `<tr><td>Total errors</td><td style="color:#e74c3c">${batchStats.totalErrors}</td></tr>` : ''}${sizeRowsHtml}
         <tr><td>Total time</td><td>${batchTime.toFixed(1)}s</td></tr>
       </table>
@@ -3886,11 +3911,17 @@ function syncNCXIdentifier(ncxText, mainIdentifier) {
 
 /**
  * Fix OPF content: fix media-types, strip svg properties,
- * update split image manifest entries, ensure cover meta.
+ * update split image manifest entries, ensure cover meta,
+ * drop manifest entries for stripped embedded fonts.
  * DOMParser with regex fallback.
  */
-function fixOPF(opfText, opfOriginal, opfDir, splitImages = {}) {
+function fixOPF(opfText, opfOriginal, opfDir, splitImages = {}, strippedFontPaths = new Set()) {
   let t = opfText;
+
+  const resolveHref = (href) => {
+    const decoded = decodeHref(href);
+    return opfDir ? `${opfDir}/${decoded}` : decoded;
+  };
 
   try {
     const parser = new DOMParser();
@@ -3906,6 +3937,16 @@ function fixOPF(opfText, opfOriginal, opfDir, splitImages = {}) {
       const type = item.getAttribute('media-type') || '';
       if (href.endsWith('.jpg') && type.match(/^image\/(png|gif|webp|bmp)$/)) {
         item.setAttribute('media-type', 'image/jpeg');
+      }
+    }
+
+    // Drop manifest entries for embedded fonts that were stripped from the archive
+    if (strippedFontPaths.size > 0) {
+      for (const item of items) {
+        const href = item.getAttribute('href') || '';
+        if (strippedFontPaths.has(resolveHref(href)) || strippedFontPaths.has(decodeHref(href))) {
+          item.remove();
+        }
       }
     }
 
@@ -3954,6 +3995,13 @@ function fixOPF(opfText, opfOriginal, opfDir, splitImages = {}) {
     t = t.replace(/(<(?:\w+:)?item\b[^>]*href="[^"]+\.jpg"[^>]*)media-type="image\/(png|gif|webp|bmp)"/g, '$1media-type="image/jpeg"');
     t = t.replace(/(<(?:\w+:)?item\b[^>]*)media-type="image\/(png|gif|webp|bmp)"([^>]*href="[^"]+\.jpg")/g, '$1media-type="image/jpeg"$3');
     t = t.replace(/\s+svg(?=["'\s>])/g, '');
+    if (strippedFontPaths.size > 0) {
+      t = t.replace(/<(?:\w+:)?item\b[^>]*\/>/g, (tag) => {
+        const hrefMatch = tag.match(/href="([^"]+)"/);
+        if (!hrefMatch) return tag;
+        return (strippedFontPaths.has(resolveHref(hrefMatch[1])) || strippedFontPaths.has(decodeHref(hrefMatch[1]))) ? '' : tag;
+      });
+    }
     for (const [splitKey, splitInfo] of Object.entries(splitImages)) {
       const parts = splitInfo.parts || splitInfo;
       let origHref = opfDir && splitKey.startsWith(opfDir + '/') ? splitKey.substring(opfDir.length + 1) : splitKey;
@@ -4722,7 +4770,7 @@ async function convertEpubFile(file, progressCallback) {
   clearLog();
   showLog();
   log(`<strong>${file.name}</strong> <span class="log-detail">(${formatBytes(originalSize)})</span>`, '', 'INFO');
-  log(`Quality: ${JPEG_QUALITY}% | Overlap: ${OVERLAP_PERCENT}% | Rotation: ${HANDEDNESS === 'right' ? 'CW' : 'CCW'} | Grayscale: ${ENABLE_GRAYSCALE ? 'ON' : 'OFF'} | Auto-crop: ${ENABLE_AUTO_CROP ? 'ON' : 'OFF'}`, '', 'INFO');
+  log(`Quality: ${JPEG_QUALITY}% | Overlap: ${OVERLAP_PERCENT}% | Rotation: ${HANDEDNESS === 'right' ? 'CW' : 'CCW'} | Grayscale: ${ENABLE_GRAYSCALE ? 'ON' : 'OFF'} | Auto-crop: ${ENABLE_AUTO_CROP ? 'ON' : 'OFF'} | Strip fonts: ${ENABLE_FONT_STRIP ? 'ON' : 'OFF'}`, '', 'INFO');
 
   const zip = await JSZip.loadAsync(file);
   const renamed = {};
@@ -5002,6 +5050,19 @@ async function convertEpubFile(file, progressCallback) {
     mainIdentifier = extractIdentifier(opfContent);
   }
 
+  // Embedded fonts (TTF/OTF/WOFF/WOFF2) are dead weight: the reader's CSS parser
+  // never parses @font-face (see CssParser.h), so bundled fonts are never used for
+  // rendering. Collected here (cheap path check, no I/O) so fixOPF can drop the
+  // matching manifest entries before the OPF is written out below.
+  const strippedFontPaths = new Set();
+  if (ENABLE_FONT_STRIP) {
+    for (const [path, fileObj] of entries) {
+      if (!fileObj.dir && path.toLowerCase().match(/\.(ttf|otf|woff2?)$/)) {
+        strippedFontPaths.add(path);
+      }
+    }
+  }
+
   // Third pass: update OPF using fixOPF (DOMParser with regex fallback)
   if (opfContent) {
     let t = opfContent;
@@ -5009,7 +5070,7 @@ async function convertEpubFile(file, progressCallback) {
       t = t.split(o.split('/').pop()).join(n.split('/').pop());
     }
     const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')) : '';
-    t = fixOPF(t, opfContent, opfDir, splitImages);
+    t = fixOPF(t, opfContent, opfDir, splitImages, strippedFontPaths);
     if (t !== opfContent) logFix('OPF', 'manifest updated');
     out.file(opfPath, t, { compression: 'DEFLATE', compressionOptions: { level: 8 }, createFolders: false });
   }
@@ -5020,6 +5081,14 @@ async function convertEpubFile(file, progressCallback) {
     if (fileObj.dir || path === 'mimetype') continue;
     const low = path.toLowerCase();
     if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/) || low.match(/\.(xhtml|html|htm)$/) || low.endsWith('.opf')) continue;
+
+    if (strippedFontPaths.has(path)) {
+      const fontData = await fileObj.async('arraybuffer');
+      conversionStats.fontsStripped++;
+      conversionStats.fontBytesSaved += fontData.byteLength;
+      logSkip(path.split('/').pop(), 'embedded font, unused by e-ink renderer');
+      continue;
+    }
 
     let data = await fileObj.async('arraybuffer');
     if (low.endsWith('.css')) {
