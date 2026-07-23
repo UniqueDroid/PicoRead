@@ -515,11 +515,17 @@ void LyraTheme::drawEmptyRecents(const GfxRenderer& renderer, const Rect rect) c
 void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                const std::function<std::string(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
-  for (int i = 0; i < buttonCount; ++i) {
+  // Paginate rather than draw every row unconditionally - with enough home-screen
+  // tiles the full list no longer fits in one screen (see BaseTheme::drawButtonMenu).
+  const int rowStep = LyraMetrics::values.menuRowHeight + LyraMetrics::values.menuSpacing;
+  const int pageItems = std::max(1, rect.height / rowStep);
+  const int safeSelectedIndex = std::max(0, selectedIndex);
+  const int pageStartIndex = (safeSelectedIndex / pageItems) * pageItems;
+
+  for (int i = pageStartIndex; i < buttonCount && i < pageStartIndex + pageItems; ++i) {
     int tileWidth = rect.width - LyraMetrics::values.contentSidePadding * 2;
     Rect tileRect = Rect{rect.x + LyraMetrics::values.contentSidePadding,
-                         rect.y + i * (LyraMetrics::values.menuRowHeight + LyraMetrics::values.menuSpacing), tileWidth,
-                         LyraMetrics::values.menuRowHeight};
+                         rect.y + (i - pageStartIndex) * rowStep, tileWidth, LyraMetrics::values.menuRowHeight};
 
     const bool selected = selectedIndex == i;
 

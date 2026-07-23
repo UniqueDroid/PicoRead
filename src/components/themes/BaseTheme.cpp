@@ -665,9 +665,17 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
 void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                const std::function<std::string(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
-  for (int i = 0; i < buttonCount; ++i) {
-    const int tileY = BaseMetrics::values.verticalSpacing + rect.y +
-                      static_cast<int>(i) * (BaseMetrics::values.menuRowHeight + BaseMetrics::values.menuSpacing);
+  // Paginate rather than draw every row unconditionally - with enough home-screen
+  // tiles (Bookmarks/Flappy/Stats/...) the full list no longer fits in one screen
+  // and would otherwise run behind the button hints at the bottom.
+  const int rowStep = BaseMetrics::values.menuRowHeight + BaseMetrics::values.menuSpacing;
+  const int pageItems = std::max(1, (rect.height - BaseMetrics::values.verticalSpacing) / rowStep);
+  const int safeSelectedIndex = std::max(0, selectedIndex);
+  const int pageStartIndex = (safeSelectedIndex / pageItems) * pageItems;
+
+  for (int i = pageStartIndex; i < buttonCount && i < pageStartIndex + pageItems; ++i) {
+    const int tileY =
+        BaseMetrics::values.verticalSpacing + rect.y + static_cast<int>(i - pageStartIndex) * rowStep;
 
     const bool selected = selectedIndex == i;
 
