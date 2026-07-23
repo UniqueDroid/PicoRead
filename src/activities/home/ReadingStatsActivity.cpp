@@ -41,8 +41,9 @@ void ReadingStatsActivity::drawStatsCard(int x, int y, int width, const std::str
   const int rowHeight = 76;
   const int cardHeight = titleBarHeight + rowHeight * 2;
 
-  renderer.drawRect(x, y, width, cardHeight);
-  renderer.drawRect(x, y, width, titleBarHeight);
+  constexpr int cardCornerRadius = 16;
+  renderer.drawRoundedRect(x, y, width, cardHeight, 2, cardCornerRadius, true);
+  renderer.drawLine(x + 1, y + titleBarHeight, x + width - 2, y + titleBarHeight, 1, true);
 
   const std::string truncated = renderer.truncatedText(UI_10_FONT_ID, title.c_str(), width - 16);
   renderer.drawText(UI_10_FONT_ID, x + 8, y + 9, truncated.c_str());
