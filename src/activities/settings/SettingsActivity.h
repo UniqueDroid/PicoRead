@@ -24,6 +24,8 @@ enum class SettingAction {
   SdFirmwareUpdate,
   Language,
   DownloadFonts,
+  Restart,
+  Shutdown,
 };
 
 struct SettingInfo {

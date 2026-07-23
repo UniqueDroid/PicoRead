@@ -21,6 +21,7 @@
 #include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
+#include "activities/ActivityManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
@@ -66,6 +67,8 @@ void SettingsActivity::rebuildSettingsLists() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_RESTART, SettingAction::Restart));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_SHUTDOWN, SettingAction::Shutdown));
   // Insert "Manage Fonts" right after the font family setting so users discover it naturally
   readerSettings.insert(readerSettings.begin() + 1,
                         SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts));
@@ -294,6 +297,14 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::Restart:
+        SETTINGS.saveToFile();
+        ESP.restart();
+        break;
+      case SettingAction::Shutdown:
+        SETTINGS.saveToFile();
+        activityManager.goToSleep(false);
         break;
       case SettingAction::None:
         // Do nothing
