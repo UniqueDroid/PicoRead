@@ -14,7 +14,7 @@ class FlappyGameActivity final : public Activity {
   static constexpr int PIPE_SPEED_STEP = 50;
   static constexpr int PIPE_WIDTH = 60;
   static constexpr int PIPE_GAP_HEIGHT = 220;
-  static constexpr int BIRD_SIZE = 32;  // matches FlappyIcon's native 32x32 bitmap
+  static constexpr int BIRD_SIZE = 40;  // matches FlappyIconGame's native 40x40 bitmap
   static constexpr int BIRD_X = 80;
 
   unsigned long lastTickMs = 0;

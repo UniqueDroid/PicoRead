@@ -20,7 +20,7 @@ constexpr int kGap = 12;
 constexpr int kSidePadding = 16;
 constexpr int kCornerRadius = 12;
 constexpr int kIconSize = 32;
-constexpr int kTileHeight = 78;
+constexpr int kTileHeight = 92;
 
 const uint8_t* iconForName(UIIcon icon) {
   switch (icon) {

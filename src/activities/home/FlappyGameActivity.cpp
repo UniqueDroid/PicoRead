@@ -116,7 +116,7 @@ void FlappyGameActivity::render(RenderLock&&) {
                       contentHeight - pipeGapY - PIPE_GAP_HEIGHT);
   }
 
-  renderer.drawIcon(FlappyIcon, fieldX + BIRD_X, contentTop + birdY, BIRD_SIZE);
+  renderer.drawIcon(FlappyIconGame, fieldX + BIRD_X, contentTop + birdY, BIRD_SIZE);
 
   char scoreBuf[32];
   snprintf(scoreBuf, sizeof(scoreBuf), tr(STR_SCORE_FORMAT), score);
