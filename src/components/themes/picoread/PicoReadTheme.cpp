@@ -93,14 +93,17 @@ void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonC
 }
 
 // Shows up to 3 recent books side by side instead of Classic's single cover
-// (see PicoReadMetrics::homeRecentBooksCount). Adapted from Lyra3CoversTheme,
-// the existing 3-cover reference implementation in this codebase.
+// (see PicoReadMetrics::homeRecentBooksCount). Title/author/"Continue Reading"
+// are overlaid directly on the cover image (small box behind the text for
+// legibility), matching Classic's single-cover style - not a separate label
+// strip below the image.
 void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                         const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                         bool& bufferRestored, std::function<bool()> storeCoverBuffer) const {
   const int count = PicoReadMetrics::values.homeRecentBooksCount;
   const int tileWidth = (rect.width - 2 * PicoReadMetrics::values.contentSidePadding) / count;
   const int tileY = rect.y;
+  const int tileHeight = PicoReadMetrics::values.homeCoverTileHeight;
   const bool hasContinueReading = !recentBooks.empty();
 
   if (!hasContinueReading) {
@@ -110,69 +113,78 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     return;
   }
 
+  const int shown = std::min(static_cast<int>(recentBooks.size()), count);
+
   if (!coverRendered) {
-    for (int i = 0; i < std::min(static_cast<int>(recentBooks.size()), count); i++) {
+    for (int i = 0; i < shown; i++) {
       const std::string coverPath = recentBooks[i].coverBmpPath;
-      bool hasCover = true;
       const int tileX = PicoReadMetrics::values.contentSidePadding + tileWidth * i;
-      if (coverPath.empty()) {
-        hasCover = false;
-      } else {
-        const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, PicoReadMetrics::values.homeCoverHeight);
+      bool hasCover = false;
+      if (!coverPath.empty()) {
+        const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, tileHeight);
         HalFile file;
         if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
           Bitmap bitmap(file);
           if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-            const float coverHeight = static_cast<float>(bitmap.getHeight());
-            const float coverWidth = static_cast<float>(bitmap.getWidth());
-            const float ratio = coverWidth / coverHeight;
-            const float tileRatio = static_cast<float>(tileWidth - 2 * kCoverHPadding) /
-                                    static_cast<float>(PicoReadMetrics::values.homeCoverHeight);
-            const float cropX = 1.0f - (tileRatio / ratio);
-            renderer.drawBitmap(bitmap, tileX + kCoverHPadding, tileY + kCoverHPadding, tileWidth - 2 * kCoverHPadding,
-                                PicoReadMetrics::values.homeCoverHeight, cropX);
-          } else {
-            hasCover = false;
+            renderer.drawBitmap(bitmap, tileX + kCoverHPadding, tileY, tileWidth - 2 * kCoverHPadding, tileHeight);
+            hasCover = true;
           }
           file.close();
         }
       }
-      renderer.drawRect(tileX + kCoverHPadding, tileY + kCoverHPadding, tileWidth - 2 * kCoverHPadding,
-                        PicoReadMetrics::values.homeCoverHeight, true);
+      renderer.drawRect(tileX + kCoverHPadding, tileY, tileWidth - 2 * kCoverHPadding, tileHeight, true);
       if (!hasCover) {
-        renderer.fillRect(tileX + kCoverHPadding, tileY + kCoverHPadding + (PicoReadMetrics::values.homeCoverHeight / 3),
-                          tileWidth - 2 * kCoverHPadding, 2 * PicoReadMetrics::values.homeCoverHeight / 3, true);
-        renderer.drawIcon(CoverIcon, tileX + kCoverHPadding + 24, tileY + kCoverHPadding + 24, 32);
+        renderer.fillRect(tileX + kCoverHPadding, tileY + tileHeight / 3, tileWidth - 2 * kCoverHPadding,
+                          2 * tileHeight / 3, true);
+        renderer.drawIcon(CoverIcon, tileX + kCoverHPadding + 24, tileY + 24, 32);
       }
     }
     coverBufferStored = storeCoverBuffer();
     coverRendered = coverBufferStored;
   }
 
-  for (int i = 0; i < std::min(static_cast<int>(recentBooks.size()), count); i++) {
+  for (int i = 0; i < shown; i++) {
     const bool bookSelected = selectorIndex == i;
     const int tileX = PicoReadMetrics::values.contentSidePadding + tileWidth * i;
-    const int maxLineWidth = tileWidth - 2 * kCoverHPadding;
-    const auto titleLines = renderer.wrappedText(SMALL_FONT_ID, recentBooks[i].title.c_str(), maxLineWidth, 3);
-    const int titleLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
-    const int dynamicBlockHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
-    const int dynamicTitleBoxHeight = dynamicBlockHeight + kCoverHPadding + 5;
+    const int maxTextWidth = tileWidth - 2 * kCoverHPadding - 16;
 
-    if (bookSelected) {
-      renderer.fillRoundedRect(tileX, tileY, tileWidth, kCoverHPadding, kCoverCornerRadius, true, true, false, false,
-                               Color::LightGray);
-      renderer.fillRectDither(tileX, tileY + kCoverHPadding, kCoverHPadding, PicoReadMetrics::values.homeCoverHeight,
-                              Color::LightGray);
-      renderer.fillRectDither(tileX + tileWidth - kCoverHPadding, tileY + kCoverHPadding, kCoverHPadding,
-                              PicoReadMetrics::values.homeCoverHeight, Color::LightGray);
-      renderer.fillRoundedRect(tileX, tileY + PicoReadMetrics::values.homeCoverHeight + kCoverHPadding, tileWidth,
-                               dynamicTitleBoxHeight, kCoverCornerRadius, false, false, true, true, Color::LightGray);
+    const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, recentBooks[i].title.c_str(), maxTextWidth, 2);
+    const std::string& author = recentBooks[i].author;
+    const std::string truncatedAuthor =
+        author.empty() ? std::string{} : renderer.truncatedText(SMALL_FONT_ID, author.c_str(), maxTextWidth);
+
+    const int titleLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    int totalTextHeight = titleLineHeight * static_cast<int>(titleLines.size());
+    if (!truncatedAuthor.empty()) totalTextHeight += renderer.getLineHeight(SMALL_FONT_ID) * 3 / 2;
+
+    int titleY = tileY + (tileHeight - totalTextHeight) / 2;
+
+    if (coverRendered) {
+      constexpr int boxPadding = 6;
+      int maxLineWidth = 0;
+      for (const auto& line : titleLines) {
+        maxLineWidth = std::max(maxLineWidth, renderer.getTextWidth(UI_10_FONT_ID, line.c_str()));
+      }
+      if (!truncatedAuthor.empty()) {
+        maxLineWidth = std::max(maxLineWidth, renderer.getTextWidth(SMALL_FONT_ID, truncatedAuthor.c_str()));
+      }
+      const int boxWidth = std::min(tileWidth - 2 * kCoverHPadding, maxLineWidth + boxPadding * 2);
+      const int boxHeight = totalTextHeight + boxPadding * 2;
+      const int boxX = tileX + (tileWidth - boxWidth) / 2;
+      renderer.fillRect(boxX, titleY - boxPadding, boxWidth, boxHeight, bookSelected);
+      renderer.drawRect(boxX, titleY - boxPadding, boxWidth, boxHeight, !bookSelected);
     }
 
-    int currentY = tileY + PicoReadMetrics::values.homeCoverHeight + kCoverHPadding + 5;
     for (const auto& line : titleLines) {
-      renderer.drawText(SMALL_FONT_ID, tileX + kCoverHPadding, currentY, line.c_str(), true);
-      currentY += titleLineHeight;
+      const int lineWidth = renderer.getTextWidth(UI_10_FONT_ID, line.c_str());
+      renderer.drawText(UI_10_FONT_ID, tileX + (tileWidth - lineWidth) / 2, titleY, line.c_str(), !bookSelected);
+      titleY += titleLineHeight;
+    }
+    if (!truncatedAuthor.empty()) {
+      titleY += renderer.getLineHeight(SMALL_FONT_ID) / 2;
+      const int authorWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedAuthor.c_str());
+      renderer.drawText(SMALL_FONT_ID, tileX + (tileWidth - authorWidth) / 2, titleY, truncatedAuthor.c_str(),
+                        !bookSelected);
     }
   }
 

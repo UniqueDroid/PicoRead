@@ -10,8 +10,8 @@ class GfxRenderer;
 namespace PicoReadMetrics {
 constexpr ThemeMetrics values = [] {
   ThemeMetrics v = BaseMetrics::values;
-  v.homeCoverHeight = 290;
-  v.homeCoverTileHeight = 290;
+  v.homeCoverHeight = 220;
+  v.homeCoverTileHeight = 290;  // leaves ~70px below the cover image for the (up to 3-line) title
   v.homeRecentBooksCount = 3;
   return v;
 }();
