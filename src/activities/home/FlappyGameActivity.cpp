@@ -115,7 +115,12 @@ void FlappyGameActivity::render(RenderLock&&) {
                       contentHeight - pipeGapY - PIPE_GAP_HEIGHT);
   }
 
-  renderer.fillRect(fieldX + BIRD_X, contentTop + birdY, BIRD_SIZE, BIRD_SIZE);
+  // Rounded body + a small pointed beak + a white eye cutout, instead of a plain square.
+  const int birdScreenX = fieldX + BIRD_X;
+  const int birdScreenY = contentTop + birdY;
+  renderer.fillRoundedRect(birdScreenX, birdScreenY + 4, BIRD_SIZE - 6, BIRD_SIZE - 4, 6, Color::Black);
+  renderer.fillRect(birdScreenX + BIRD_SIZE - 8, birdScreenY + 8, 8, 6);
+  renderer.fillRect(birdScreenX + 5, birdScreenY + 8, 3, 3, false);
 
   char scoreBuf[32];
   snprintf(scoreBuf, sizeof(scoreBuf), tr(STR_SCORE_FORMAT), score);

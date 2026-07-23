@@ -4,71 +4,81 @@
 
 #include <algorithm>
 
-uint32_t ReadingStatsStore::daysSinceEpoch(uint16_t year, uint8_t month, uint8_t day) {
-  // Howard Hinnant's days_from_civil (proleptic Gregorian, valid for any date).
-  const int y = year - (month <= 2 ? 1 : 0);
-  const int era = (y >= 0 ? y : y - 399) / 400;
-  const unsigned yoe = static_cast<unsigned>(y - era * 400);                              // [0, 399]
-  const unsigned doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;           // [0, 365]
-  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;                              // [0, 146096]
-  return static_cast<uint32_t>(era * 146097 + static_cast<int>(doe) - 719468);             // since 1970-01-01
-}
-
 void ReadingStatsStore::toJson(JsonDocument& doc) const {
-  JsonArray arr = doc["days"].to<JsonArray>();
-  for (const auto& d : days) {
+  JsonArray arr = doc["books"].to<JsonArray>();
+  for (const auto& b : books) {
     JsonObject obj = arr.add<JsonObject>();
-    obj["d"] = d.daysSinceEpoch;
-    obj["m"] = d.minutes;
-    obj["p"] = d.pages;
+    obj["path"] = b.bookPath;
+    obj["sessions"] = b.sessions;
+    obj["minutes"] = b.totalMinutes;
+    obj["pages"] = b.totalPages;
   }
 }
 
 bool ReadingStatsStore::fromJson(JsonVariantConst doc) {
-  days.clear();
-  JsonArrayConst arr = doc["days"].as<JsonArrayConst>();
-  days.reserve(std::min(arr.size(), MAX_TRACKED_DAYS));
+  books.clear();
+  JsonArrayConst arr = doc["books"].as<JsonArrayConst>();
+  books.reserve(std::min(arr.size(), MAX_TRACKED_BOOKS));
   for (JsonObjectConst obj : arr) {
-    DailyReadingStat stat;
-    stat.daysSinceEpoch = obj["d"] | 0;
-    stat.minutes = obj["m"] | 0;
-    stat.pages = obj["p"] | 0;
-    days.push_back(stat);
+    BookReadingStat stat;
+    stat.bookPath = obj["path"] | "";
+    stat.sessions = obj["sessions"] | 0;
+    stat.totalMinutes = obj["minutes"] | 0;
+    stat.totalPages = obj["pages"] | 0;
+    if (!stat.bookPath.empty()) books.push_back(stat);
   }
-  std::sort(days.begin(), days.end(),
-            [](const DailyReadingStat& a, const DailyReadingStat& b) { return a.daysSinceEpoch < b.daysSinceEpoch; });
 
-  LOG_DBG("STATS", "Reading stats loaded from file (%d days)", static_cast<int>(days.size()));
+  LOG_DBG("STATS", "Reading stats loaded from file (%d books)", static_cast<int>(books.size()));
   return true;
 }
 
-void ReadingStatsStore::addSession(uint32_t day, uint16_t minutes, uint16_t pages) {
+void ReadingStatsStore::addSession(const std::string& bookPath, uint16_t minutes, uint16_t pages) {
   if (minutes == 0 && pages == 0) return;
 
-  auto it = std::find_if(days.begin(), days.end(), [day](const DailyReadingStat& d) { return d.daysSinceEpoch == day; });
-  if (it != days.end()) {
-    it->minutes += minutes;
-    it->pages += pages;
+  auto it = std::find_if(books.begin(), books.end(), [&bookPath](const BookReadingStat& b) { return b.bookPath == bookPath; });
+  if (it != books.end()) {
+    it->sessions++;
+    it->totalMinutes += minutes;
+    it->totalPages += pages;
   } else {
-    DailyReadingStat stat;
-    stat.daysSinceEpoch = day;
-    stat.minutes = minutes;
-    stat.pages = pages;
-    days.push_back(stat);
-    std::sort(days.begin(), days.end(), [](const DailyReadingStat& a, const DailyReadingStat& b) {
-      return a.daysSinceEpoch < b.daysSinceEpoch;
-    });
-  }
-
-  // Prune oldest entries beyond the tracked window.
-  if (days.size() > MAX_TRACKED_DAYS) {
-    days.erase(days.begin(), days.begin() + static_cast<long>(days.size() - MAX_TRACKED_DAYS));
+    if (books.size() >= MAX_TRACKED_BOOKS) {
+      // Drop the least-active tracked book to make room, rather than silently refusing
+      // to track a book someone is actively reading right now.
+      auto minIt = std::min_element(books.begin(), books.end(), [](const BookReadingStat& a, const BookReadingStat& b) {
+        return a.totalMinutes < b.totalMinutes;
+      });
+      if (minIt != books.end()) books.erase(minIt);
+    }
+    BookReadingStat stat;
+    stat.bookPath = bookPath;
+    stat.sessions = 1;
+    stat.totalMinutes = minutes;
+    stat.totalPages = pages;
+    books.push_back(stat);
   }
 
   saveToFile();
 }
 
-const DailyReadingStat* ReadingStatsStore::getDay(uint32_t day) const {
-  auto it = std::find_if(days.begin(), days.end(), [day](const DailyReadingStat& d) { return d.daysSinceEpoch == day; });
-  return it != days.end() ? &(*it) : nullptr;
+const BookReadingStat* ReadingStatsStore::getBook(const std::string& bookPath) const {
+  auto it = std::find_if(books.begin(), books.end(), [&bookPath](const BookReadingStat& b) { return b.bookPath == bookPath; });
+  return it != books.end() ? &(*it) : nullptr;
+}
+
+uint32_t ReadingStatsStore::totalSessions() const {
+  uint32_t sum = 0;
+  for (const auto& b : books) sum += b.sessions;
+  return sum;
+}
+
+uint32_t ReadingStatsStore::totalMinutes() const {
+  uint32_t sum = 0;
+  for (const auto& b : books) sum += b.totalMinutes;
+  return sum;
+}
+
+uint32_t ReadingStatsStore::totalPages() const {
+  uint32_t sum = 0;
+  for (const auto& b : books) sum += b.totalPages;
+  return sum;
 }

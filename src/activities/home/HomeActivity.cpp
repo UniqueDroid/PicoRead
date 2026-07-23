@@ -4,7 +4,6 @@
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
-#include <HalClock.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Utf8.h>
@@ -22,14 +21,11 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 6;  // File Browser, Recents, Bookmarks, Flappy, File transfer, Settings
+  int count = 7;  // File Browser, Recents, Bookmarks, Flappy, Stats, File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
   if (hasOpdsServers) {
-    count++;
-  }
-  if (hasStats) {
     count++;
   }
   return count;
@@ -116,14 +112,12 @@ void HomeActivity::onEnter() {
   Activity::onEnter();
 
   hasOpdsServers = OPDS_STORE.hasServers();
-  hasStats = halClock.isAvailable();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
 
   const auto base = static_cast<int>(recentBooks.size());
-  selectorIndex =
-      initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers, hasStats);
+  selectorIndex = initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers);
 
   // Trigger first update
   requestUpdate();
@@ -190,7 +184,7 @@ void HomeActivity::loop() {
       onSelectBook(recentBooks[selectorIndex].path);
     } else {
       const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
-      switch (indexToMenuItem(menuIndex, hasOpdsServers, hasStats)) {
+      switch (indexToMenuItem(menuIndex, hasOpdsServers)) {
         case HomeMenuItem::FILE_BROWSER:
           onFileBrowserOpen();
           break;
@@ -248,18 +242,13 @@ void HomeActivity::render(RenderLock&&) {
   // Build menu items dynamically
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),
-                                        tr(STR_FLAPPY_GAME), tr(STR_FILE_TRANSFER),
+                                        tr(STR_FLAPPY_GAME), tr(STR_READING_STATS), tr(STR_FILE_TRANSFER),
                                         updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, File, Transfer, Settings};
-
-  if (hasStats) {
-    menuItems.insert(menuItems.begin() + 4, tr(STR_READING_STATS));
-    menuIcons.insert(menuIcons.begin() + 4, Book);
-  }
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Flappy, Book, Transfer, Settings};
 
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + (hasStats ? 5 : 4), tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + (hasStats ? 5 : 4), Library);
+    menuItems.insert(menuItems.begin() + 5, tr(STR_OPDS_BROWSER));
+    menuIcons.insert(menuIcons.begin() + 5, Library);
   }
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {

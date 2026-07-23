@@ -5,7 +5,6 @@
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
-#include <HalClock.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <JsonSettingsIO.h>
@@ -222,16 +221,10 @@ void EpubReaderActivity::onExit() {
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
 
-  // Record this session's reading time/pages against today's date. Requires a synced
-  // RTC (X3 only, see HalClock) - silently skipped otherwise, matching the Statistics
-  // home tile which is hidden in that case.
-  if (sessionStartMs != 0 && halClock.isAvailable()) {
-    uint16_t year;
-    uint8_t month, day;
-    if (halClock.getDate(year, month, day)) {
-      const uint16_t minutes = static_cast<uint16_t>(std::min<unsigned long>((millis() - sessionStartMs) / 60000UL, UINT16_MAX));
-      READING_STATS.addSession(ReadingStatsStore::daysSinceEpoch(year, month, day), minutes, sessionPagesRead);
-    }
+  // Record this session's reading time/pages against the book (Reading Statistics tile).
+  if (sessionStartMs != 0 && epub) {
+    const uint16_t minutes = static_cast<uint16_t>(std::min<unsigned long>((millis() - sessionStartMs) / 60000UL, UINT16_MAX));
+    READING_STATS.addSession(epub->getPath(), minutes, sessionPagesRead);
   }
   sessionStartMs = 0;
 

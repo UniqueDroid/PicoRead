@@ -1,24 +1,25 @@
 #include "ReadingStatsActivity.h"
 
 #include <GfxRenderer.h>
-#include <HalClock.h>
 #include <I18n.h>
 
 #include <cstdio>
 
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
+#include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
-// Bucket thresholds (minutes read that day) -> shading, loosely modelled on GitHub's
-// contribution heatmap. Four buckets fit comfortably in this display's dithered fills.
-Color colorForMinutes(uint16_t minutes) {
-  if (minutes == 0) return Color::White;
-  if (minutes < 15) return Color::LightGray;
-  if (minutes < 45) return Color::DarkGray;
-  return Color::Black;
+std::string formatDuration(uint32_t minutes) {
+  char buf[24];
+  if (minutes >= 60) {
+    snprintf(buf, sizeof(buf), "%uh %02umin", static_cast<unsigned>(minutes / 60), static_cast<unsigned>(minutes % 60));
+  } else {
+    snprintf(buf, sizeof(buf), "%u min", static_cast<unsigned>(minutes));
+  }
+  return buf;
 }
 }  // namespace
 
@@ -34,77 +35,69 @@ void ReadingStatsActivity::loop() {
   }
 }
 
-void ReadingStatsActivity::drawHeatmap(int x, int y, int width, int height) const {
-  uint16_t year;
-  uint8_t month, day;
-  if (!halClock.isAvailable() || !halClock.getDate(year, month, day)) {
-    renderer.drawText(UI_10_FONT_ID, x, y + 20, tr(STR_NO_UPDATE));  // RTC unsynced; nothing to show
-    return;
-  }
+void ReadingStatsActivity::drawStatsCard(int x, int y, int width, const std::string& title, uint32_t sessions,
+                                         uint32_t minutes, uint32_t pages) const {
+  const int titleBarHeight = 34;
+  const int rowHeight = 76;
+  const int cardHeight = titleBarHeight + rowHeight * 2;
 
-  const uint32_t today = ReadingStatsStore::daysSinceEpoch(year, month, day);
-  constexpr int totalCells = WEEKS_SHOWN * 7;
-  const uint32_t oldestDay = today >= (totalCells - 1) ? today - (totalCells - 1) : 0;
+  renderer.drawRect(x, y, width, cardHeight);
+  renderer.drawRect(x, y, width, titleBarHeight);
 
-  const int cellSize = 12;
-  const int gap = 3;
-  const int pitch = cellSize + gap;
-  // Center the grid horizontally within the given width.
-  const int gridWidth = WEEKS_SHOWN * pitch - gap;
-  const int startX = x + (width - gridWidth) / 2;
+  const std::string truncated = renderer.truncatedText(UI_10_FONT_ID, title.c_str(), width - 16);
+  renderer.drawText(UI_10_FONT_ID, x + 8, y + 9, truncated.c_str());
 
-  for (int i = 0; i < totalCells; i++) {
-    const uint32_t dayValue = oldestDay + i;
-    const int col = i / 7;
-    const int row = i % 7;
-    const int cellX = startX + col * pitch;
-    const int cellY = y + row * pitch;
+  const double avgSession = sessions > 0 ? static_cast<double>(minutes) / static_cast<double>(sessions) : 0.0;
+  const double pagesPerMin = minutes > 0 ? static_cast<double>(pages) / static_cast<double>(minutes) : 0.0;
 
-    const DailyReadingStat* stat = READING_STATS.getDay(dayValue);
-    const uint16_t minutes = stat ? stat->minutes : 0;
-    renderer.fillRectDither(cellX, cellY, cellSize, cellSize, colorForMinutes(minutes));
-    renderer.drawRect(cellX, cellY, cellSize, cellSize);  // outline, keeps empty cells visible as a grid
-  }
+  char valueBuf[24];
+  const int colWidth = width / 3;
 
-  (void)height;
+  auto drawCell = [&](int col, int row, const char* value, StrId labelId) {
+    const int cellX = x + col * colWidth;
+    const int cellY = y + titleBarHeight + row * rowHeight;
+    const int valueWidth = renderer.getTextAdvanceX(UI_12_FONT_ID, value, EpdFontFamily::REGULAR);
+    const int labelWidth = renderer.getTextAdvanceX(UI_10_FONT_ID, I18N.get(labelId), EpdFontFamily::REGULAR);
+    renderer.drawText(UI_12_FONT_ID, cellX + (colWidth - valueWidth) / 2, cellY + 14, value);
+    renderer.drawText(UI_10_FONT_ID, cellX + (colWidth - labelWidth) / 2, cellY + 44, I18N.get(labelId));
+  };
+
+  snprintf(valueBuf, sizeof(valueBuf), "%u", static_cast<unsigned>(sessions));
+  drawCell(0, 0, valueBuf, StrId::STR_SESSIONS);
+  drawCell(1, 0, formatDuration(minutes).c_str(), StrId::STR_READING_TIME);
+  snprintf(valueBuf, sizeof(valueBuf), "%u", static_cast<unsigned>(pages));
+  drawCell(2, 0, valueBuf, StrId::STR_PAGES_TURNED);
+
+  drawCell(0, 1, formatDuration(static_cast<uint32_t>(avgSession + 0.5)).c_str(), StrId::STR_AVG_SESSION);
+  snprintf(valueBuf, sizeof(valueBuf), "%.1f", pagesPerMin);
+  drawCell(1, 1, valueBuf, StrId::STR_PAGES_PER_MIN);
 }
 
 void ReadingStatsActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_READING_STATS));
 
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing * 2;
-  const int heatmapHeight = 7 * (12 + 3) - 3;
-  drawHeatmap(metrics.contentSidePadding, contentTop, pageWidth - 2 * metrics.contentSidePadding, heatmapHeight);
+  int cardY = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing * 2;
+  const int cardX = metrics.contentSidePadding;
+  const int cardWidth = pageWidth - 2 * metrics.contentSidePadding;
 
-  uint16_t year;
-  uint8_t month, day;
-  if (halClock.isAvailable() && halClock.getDate(year, month, day)) {
-    const uint32_t today = ReadingStatsStore::daysSinceEpoch(year, month, day);
-    const DailyReadingStat* todayStat = READING_STATS.getDay(today);
-    const int todayMinutes = todayStat ? todayStat->minutes : 0;
-    const int todayPages = todayStat ? todayStat->pages : 0;
-
-    int streak = 0;
-    for (uint32_t d = today; READING_STATS.getDay(d) != nullptr; d--) {
-      streak++;
-      if (d == 0) break;  // avoid underflow at the epoch boundary
-    }
-
-    char buf[96];
-    snprintf(buf, sizeof(buf), tr(STR_READING_STATS_SUMMARY_FORMAT), todayMinutes, todayPages, streak);
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + heatmapHeight + metrics.verticalSpacing * 3,
-                      buf);
+  if (!RECENT_BOOKS.getBooks().empty()) {
+    const RecentBook& current = RECENT_BOOKS.getBooks()[0];
+    const BookReadingStat* stat = READING_STATS.getBook(current.path);
+    drawStatsCard(cardX, cardY, cardWidth, current.title, stat ? stat->sessions : 0, stat ? stat->totalMinutes : 0,
+                  stat ? stat->totalPages : 0);
+    cardY += 34 + 76 * 2 + metrics.verticalSpacing * 2;
   }
+
+  drawStatsCard(cardX, cardY, cardWidth, tr(STR_ALL_BOOKS), READING_STATS.totalSessions(), READING_STATS.totalMinutes(),
+                READING_STATS.totalPages());
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
-  (void)pageHeight;
 }
