@@ -48,6 +48,11 @@ void UITheme::setTheme(PicoReadSettings::UI_THEME type) {
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
       break;
+    case PicoReadSettings::UI_THEME::PICOREAD:
+      LOG_DBG("UI", "Using PicoRead theme");
+      currentTheme = std::make_unique<PicoReadTheme>();
+      currentMetrics = &BaseMetrics::values;
+      break;
   }
 }
 

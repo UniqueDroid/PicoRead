@@ -41,7 +41,7 @@ void ReadingStatsActivity::drawStatsCard(int x, int y, int width, const std::str
   const int rowHeight = 76;
   const int cardHeight = titleBarHeight + rowHeight * 2;
 
-  constexpr int cardCornerRadius = 16;
+  constexpr int cardCornerRadius = 10;
   renderer.drawRoundedRect(x, y, width, cardHeight, 2, cardCornerRadius, true);
   renderer.drawLine(x + 1, y + titleBarHeight, x + width - 2, y + titleBarHeight, 1, true);
 
