@@ -17,8 +17,10 @@
 namespace {
 constexpr int kColumns = 2;
 constexpr int kGap = 12;
+constexpr int kSidePadding = 16;
 constexpr int kCornerRadius = 12;
 constexpr int kIconSize = 32;
+constexpr int kTileHeight = 78;
 
 const uint8_t* iconForName(UIIcon icon) {
   switch (icon) {
@@ -51,13 +53,14 @@ const uint8_t* iconForName(UIIcon icon) {
 void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                                    const std::function<std::string(int index)>& buttonLabel,
                                    const std::function<UIIcon(int index)>& rowIcon) const {
-  const int tileWidth = (rect.width - kGap * (kColumns - 1)) / kColumns;
-  const int tileHeight = 90;
+  const int usableWidth = rect.width - 2 * kSidePadding;
+  const int tileWidth = (usableWidth - kGap * (kColumns - 1)) / kColumns;
+  const int tileHeight = kTileHeight;
 
   for (int i = 0; i < buttonCount; ++i) {
     const int col = i % kColumns;
     const int row = i / kColumns;
-    const int tileX = rect.x + col * (tileWidth + kGap);
+    const int tileX = rect.x + kSidePadding + col * (tileWidth + kGap);
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
 

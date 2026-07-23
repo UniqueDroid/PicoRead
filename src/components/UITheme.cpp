@@ -51,7 +51,7 @@ void UITheme::setTheme(PicoReadSettings::UI_THEME type) {
     case PicoReadSettings::UI_THEME::PICOREAD:
       LOG_DBG("UI", "Using PicoRead theme");
       currentTheme = std::make_unique<PicoReadTheme>();
-      currentMetrics = &BaseMetrics::values;
+      currentMetrics = &PicoReadMetrics::values;
       break;
   }
 }
