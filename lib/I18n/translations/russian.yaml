@@ -264,6 +264,7 @@ STR_REMAP_FRONT_BUTTONS: "Переназначить передние кнопк
 STR_BOOKMARKS: "Закладки"
 STR_BOOKMARK_ADDED: "Закладка добавлена"
 STR_BOOKMARK_REMOVED: "Закладка удалена"
+STR_NO_BOOKMARKS: "Пока нет закладок. Добавьте закладку из меню чтения книги."
 STR_OPDS_BROWSER: "OPDS браузер"
 STR_SEARCH: "Поиск"
 STR_COVER_CUSTOM: "Обложка + Свой"
