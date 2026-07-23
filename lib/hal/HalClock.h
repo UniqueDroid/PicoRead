@@ -43,6 +43,14 @@ class HalClock {
   // so the HAL stays free of any app-layer settings dependency.
   bool syncFromNTP();
 
+  // Get the current calendar date from the RTC.
+  // year is full (e.g. 2026), month is 1-12, day is 1-31.
+  // Returns false if RTC is not available. Only meaningful after at least one
+  // syncFromNTP() since the last full power loss - an unsynced DS3231 holds
+  // whatever garbage/default was in its date registers at power-on.
+  bool getDate(uint16_t& year, uint8_t& month, uint8_t& day) const;
+
  private:
   bool writeTimeToRTC(uint8_t hour, uint8_t minute, uint8_t second);
+  bool writeDateToRTC(uint16_t year, uint8_t month, uint8_t day, uint8_t dayOfWeek);
 };

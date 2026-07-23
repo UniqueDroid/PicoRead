@@ -5,6 +5,7 @@
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <JsonSettingsIO.h>
@@ -32,6 +33,7 @@
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
 #include "ProgressMapper.h"
+#include "ReadingStatsStore.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
@@ -160,6 +162,9 @@ void EpubReaderActivity::onEnter() {
 
   ImageBlock::clearSessionRenderFailures();
 
+  sessionStartMs = millis();
+  sessionPagesRead = 0;
+
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
@@ -216,6 +221,19 @@ void EpubReaderActivity::onExit() {
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
+
+  // Record this session's reading time/pages against today's date. Requires a synced
+  // RTC (X3 only, see HalClock) - silently skipped otherwise, matching the Statistics
+  // home tile which is hidden in that case.
+  if (sessionStartMs != 0 && halClock.isAvailable()) {
+    uint16_t year;
+    uint8_t month, day;
+    if (halClock.getDate(year, month, day)) {
+      const uint16_t minutes = static_cast<uint16_t>(std::min<unsigned long>((millis() - sessionStartMs) / 60000UL, UINT16_MAX));
+      READING_STATS.addSession(ReadingStatsStore::daysSinceEpoch(year, month, day), minutes, sessionPagesRead);
+    }
+  }
+  sessionStartMs = 0;
 
   // Leaving mid-footnote loses the in-RAM return stack on deep sleep; persist the
   // pre-footnote position so the book reopens at the link origin, not the footnote.
@@ -926,6 +944,9 @@ void EpubReaderActivity::toggleAutoPageTurn(const uint8_t selectedPageTurnOption
 }
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
+  if (isForwardTurn && sessionPagesRead < UINT16_MAX) {
+    sessionPagesRead++;
+  }
   if (isForwardTurn) {
     // Advance within the section while there are (or may still be) more pages: either a built
     // page ahead, or the section is still building (windowed), in which case more pages exist

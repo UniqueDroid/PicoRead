@@ -13,6 +13,12 @@ HalClock halClock;  // Singleton instance
 //   0x00: Seconds  (bits 6-4 = tens, bits 3-0 = ones)
 //   0x01: Minutes  (bits 6-4 = tens, bits 3-0 = ones)
 //   0x02: Hours    (bit 6 = 12/24 mode, bits 5-4 = tens, bits 3-0 = ones)
+//   0x03: Day of week (1-7, no meaning enforced - not used by this HAL)
+//   0x04: Date (day of month, bits 5-4 = tens, bits 3-0 = ones)
+//   0x05: Month (bits 4-0 = BCD month 1-12; bit 7 = century, always written 0 -> 20xx)
+//   0x06: Year within century (00-99, BCD)
+#define DS3231_DOW_REG 0x03
+#define DS3231_DATE_REG 0x04
 
 static uint8_t bcdToDec(uint8_t bcd) { return ((bcd >> 4) * 10) + (bcd & 0x0F); }
 static uint8_t decToBcd(uint8_t dec) { return ((dec / 10) << 4) | (dec % 10); }
@@ -149,6 +155,51 @@ bool HalClock::writeTimeToRTC(uint8_t hour, uint8_t minute, uint8_t second) {
   return true;
 }
 
+bool HalClock::writeDateToRTC(uint16_t year, uint8_t month, uint8_t day, uint8_t dayOfWeek) {
+  assert(year >= 2000 && year <= 2099);
+  assert(month >= 1 && month <= 12);
+  assert(day >= 1 && day <= 31);
+  assert(dayOfWeek >= 1 && dayOfWeek <= 7);
+  Wire.beginTransmission(I2C_ADDR_DS3231);
+  Wire.write(DS3231_DOW_REG);              // Start at register 0x03
+  Wire.write(decToBcd(dayOfWeek));         // 0x03: Day of week
+  Wire.write(decToBcd(day));               // 0x04: Date
+  Wire.write(decToBcd(month));             // 0x05: Month (bit 7 = 0 -> 20xx)
+  Wire.write(decToBcd(year - 2000));       // 0x06: Year within century
+  if (Wire.endTransmission() != 0) {
+    LOG_ERR("CLK", "Failed to write date to DS3231");
+    return false;
+  }
+  return true;
+}
+
+bool HalClock::getDate(uint16_t& year, uint8_t& month, uint8_t& day) const {
+  if (!_available) return false;
+
+  Wire.beginTransmission(I2C_ADDR_DS3231);
+  Wire.write(DS3231_DATE_REG);
+  if (Wire.endTransmission(false) != 0) return false;
+
+  Wire.requestFrom(I2C_ADDR_DS3231, (uint8_t)2);
+  if (Wire.available() < 2) return false;
+
+  const uint8_t rawDate = Wire.read();
+  const uint8_t rawMonth = Wire.read();
+
+  day = bcdToDec(rawDate & 0x3F);
+  month = bcdToDec(rawMonth & 0x1F);  // mask off century bit (bit 7)
+
+  // Year register is separate (0x06); read it too.
+  Wire.beginTransmission(I2C_ADDR_DS3231);
+  Wire.write(static_cast<uint8_t>(DS3231_DATE_REG + 2));  // 0x06
+  if (Wire.endTransmission(false) != 0) return false;
+  Wire.requestFrom(I2C_ADDR_DS3231, (uint8_t)1);
+  if (Wire.available() < 1) return false;
+  year = 2000 + bcdToDec(Wire.read());
+
+  return true;
+}
+
 bool HalClock::syncFromNTP() {
   if (!_available) return false;
 
@@ -168,11 +219,17 @@ bool HalClock::syncFromNTP() {
       struct tm timeinfo;
       gmtime_r(&now, &timeinfo);
 
-      if (writeTimeToRTC(timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec)) {
-        LOG_INF("CLK", "RTC set to %02d:%02d:%02d UTC", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-        return true;
+      if (!writeTimeToRTC(timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec)) {
+        return false;
       }
-      return false;
+      const uint16_t year = 1900 + timeinfo.tm_year;
+      const uint8_t month = timeinfo.tm_mon + 1;
+      const uint8_t day = timeinfo.tm_mday;
+      const uint8_t dayOfWeek = timeinfo.tm_wday + 1;  // struct tm: 0-6 (Sun=0) -> DS3231: 1-7
+      writeDateToRTC(year, month, day, dayOfWeek);      // best-effort; time already synced above
+      LOG_INF("CLK", "RTC set to %04d-%02d-%02d %02d:%02d:%02d UTC", year, month, day, timeinfo.tm_hour,
+              timeinfo.tm_min, timeinfo.tm_sec);
+      return true;
     }
     delay(100);
   }

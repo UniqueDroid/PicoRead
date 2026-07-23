@@ -4,6 +4,7 @@
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Utf8.h>
@@ -26,6 +27,9 @@ int HomeActivity::getMenuItemCount() const {
     count += recentBooks.size();
   }
   if (hasOpdsServers) {
+    count++;
+  }
+  if (hasStats) {
     count++;
   }
   return count;
@@ -112,12 +116,14 @@ void HomeActivity::onEnter() {
   Activity::onEnter();
 
   hasOpdsServers = OPDS_STORE.hasServers();
+  hasStats = halClock.isAvailable();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);
 
   const auto base = static_cast<int>(recentBooks.size());
-  selectorIndex = initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers);
+  selectorIndex =
+      initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers, hasStats);
 
   // Trigger first update
   requestUpdate();
@@ -184,7 +190,7 @@ void HomeActivity::loop() {
       onSelectBook(recentBooks[selectorIndex].path);
     } else {
       const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
-      switch (indexToMenuItem(menuIndex, hasOpdsServers)) {
+      switch (indexToMenuItem(menuIndex, hasOpdsServers, hasStats)) {
         case HomeMenuItem::FILE_BROWSER:
           onFileBrowserOpen();
           break;
@@ -193,6 +199,9 @@ void HomeActivity::loop() {
           break;
         case HomeMenuItem::ALL_BOOKMARKS:
           onAllBookmarksOpen();
+          break;
+        case HomeMenuItem::STATS:
+          onReadingStatsOpen();
           break;
         case HomeMenuItem::OPDS_BROWSER:
           onOpdsBrowserOpen();
@@ -240,9 +249,14 @@ void HomeActivity::render(RenderLock&&) {
                                         updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
   std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Transfer, Settings};
 
+  if (hasStats) {
+    menuItems.insert(menuItems.begin() + 3, tr(STR_READING_STATS));
+    menuIcons.insert(menuIcons.begin() + 3, Book);
+  }
+
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 3, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 3, Library);
+    menuItems.insert(menuItems.begin() + (hasStats ? 4 : 3), tr(STR_OPDS_BROWSER));
+    menuIcons.insert(menuIcons.begin() + (hasStats ? 4 : 3), Library);
   }
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
@@ -282,6 +296,7 @@ void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
 void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 
 void HomeActivity::onAllBookmarksOpen() { activityManager.goToAllBookmarks(); }
+void HomeActivity::onReadingStatsOpen() { activityManager.goToReadingStats(); }
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 
