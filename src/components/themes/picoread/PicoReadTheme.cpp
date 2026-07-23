@@ -157,7 +157,8 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     int totalTextHeight = titleLineHeight * static_cast<int>(titleLines.size());
     if (!truncatedAuthor.empty()) totalTextHeight += renderer.getLineHeight(SMALL_FONT_ID) * 3 / 2;
 
-    int titleY = tileY + (tileHeight - totalTextHeight) / 2;
+    constexpr int kBottomMargin = 10;
+    int titleY = tileY + tileHeight - totalTextHeight - kBottomMargin;
 
     if (coverRendered) {
       constexpr int boxPadding = 6;
