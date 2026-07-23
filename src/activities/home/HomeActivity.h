@@ -40,6 +40,8 @@ class HomeActivity final : public Activity {
     ++i;
     if (item == HomeMenuItem::ALL_BOOKMARKS) return i;
     ++i;
+    if (item == HomeMenuItem::FLAPPY) return i;
+    ++i;
     if (item == HomeMenuItem::STATS) return hasStats ? i : 0;
     if (hasStats) ++i;
     if (item == HomeMenuItem::OPDS_BROWSER) return hasOpdsUrl ? i : 0;
@@ -56,6 +58,7 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::FILE_BROWSER;
     if (idx == i++) return HomeMenuItem::RECENTS;
     if (idx == i++) return HomeMenuItem::ALL_BOOKMARKS;
+    if (idx == i++) return HomeMenuItem::FLAPPY;
     if (hasStats && idx == i++) return HomeMenuItem::STATS;
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
@@ -67,6 +70,7 @@ class HomeActivity final : public Activity {
   void onRecentsOpen();
   void onAllBookmarksOpen();
   void onReadingStatsOpen();
+  void onFlappyGameOpen();
   void onSettingsOpen();
   void onFileTransferOpen();
   void onOpdsBrowserOpen();

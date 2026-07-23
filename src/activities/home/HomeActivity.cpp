@@ -22,7 +22,7 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 5;  // File Browser, Recents, Bookmarks, File transfer, Settings
+  int count = 6;  // File Browser, Recents, Bookmarks, Flappy, File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -200,6 +200,9 @@ void HomeActivity::loop() {
         case HomeMenuItem::ALL_BOOKMARKS:
           onAllBookmarksOpen();
           break;
+        case HomeMenuItem::FLAPPY:
+          onFlappyGameOpen();
+          break;
         case HomeMenuItem::STATS:
           onReadingStatsOpen();
           break;
@@ -245,18 +248,18 @@ void HomeActivity::render(RenderLock&&) {
   // Build menu items dynamically
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),
-                                        tr(STR_FILE_TRANSFER),
+                                        tr(STR_FLAPPY_GAME), tr(STR_FILE_TRANSFER),
                                         updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Transfer, Settings};
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, File, Transfer, Settings};
 
   if (hasStats) {
-    menuItems.insert(menuItems.begin() + 3, tr(STR_READING_STATS));
-    menuIcons.insert(menuIcons.begin() + 3, Book);
+    menuItems.insert(menuItems.begin() + 4, tr(STR_READING_STATS));
+    menuIcons.insert(menuIcons.begin() + 4, Book);
   }
 
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + (hasStats ? 4 : 3), tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + (hasStats ? 4 : 3), Library);
+    menuItems.insert(menuItems.begin() + (hasStats ? 5 : 4), tr(STR_OPDS_BROWSER));
+    menuIcons.insert(menuIcons.begin() + (hasStats ? 5 : 4), Library);
   }
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
@@ -297,6 +300,7 @@ void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 
 void HomeActivity::onAllBookmarksOpen() { activityManager.goToAllBookmarks(); }
 void HomeActivity::onReadingStatsOpen() { activityManager.goToReadingStats(); }
+void HomeActivity::onFlappyGameOpen() { activityManager.goToFlappyGame(); }
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 

@@ -12,6 +12,7 @@
 #include "home/AllBookmarksActivity.h"
 #include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
+#include "home/FlappyGameActivity.h"
 #include "home/HomeActivity.h"
 #include "home/ReadingStatsActivity.h"
 #include "home/RecentBooksActivity.h"
@@ -195,6 +196,10 @@ void ActivityManager::goToReadingStats() {
   replaceActivity(std::make_unique<ReadingStatsActivity>(renderer, mappedInput));
 }
 
+void ActivityManager::goToFlappyGame() {
+  replaceActivity(std::make_unique<FlappyGameActivity>(renderer, mappedInput));
+}
+
 void ActivityManager::goToBrowser() {
   const auto& servers = OPDS_STORE.getServers();
   // Skip the server picker when there's only one server configured
@@ -231,6 +236,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::ALL_BOOKMARKS;
     } else if (activityName == "ReadingStats") {
       initialMenuItem = HomeMenuItem::STATS;
+    } else if (activityName == "FlappyGame") {
+      initialMenuItem = HomeMenuItem::FLAPPY;
     } else if (activityName == "OpdsBookBrowser") {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
     } else if (activityName == "PicoReadWebServer") {
