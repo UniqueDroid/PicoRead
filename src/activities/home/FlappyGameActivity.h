@@ -21,6 +21,7 @@ class FlappyGameActivity final : public Activity {
   bool flapLatched = false;
   bool gameOver = false;
   bool started = false;  // waits for the first flap before the pipe starts moving
+  bool highScoreOffered = false;  // whether this game-over's name prompt has been shown yet
 
   int birdY = 0;
   int pipeX = 0;

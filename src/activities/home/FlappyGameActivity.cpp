@@ -17,6 +17,7 @@ void FlappyGameActivity::resetGame() {
   gameOver = false;
   started = false;
   flapLatched = false;
+  highScoreOffered = false;
   score = 0;
   birdY = contentHeight / 2;
   spawnPipe();
@@ -100,6 +101,18 @@ void FlappyGameActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (gameOver) {
+      // First Confirm after Game Over offers the name prompt (if the score
+      // qualifies), so the player actually sees the Game Over screen first
+      // instead of it flashing straight into the keyboard. A second Confirm -
+      // either because the score didn't qualify or after entering a name -
+      // starts a new round.
+      if (!highScoreOffered) {
+        highScoreOffered = true;
+        if (FLAPPY_SCORES.qualifies(score)) {
+          startHighScoreEntry();
+          return;
+        }
+      }
       resetGame();
       requestUpdate();
       return;
@@ -110,12 +123,8 @@ void FlappyGameActivity::loop() {
   const unsigned long now = millis();
   if (now - lastTickMs >= TICK_MS) {
     lastTickMs = now;
-    const bool wasGameOver = gameOver;
     tick();
     requestUpdate();
-    if (!wasGameOver && gameOver && FLAPPY_SCORES.qualifies(score)) {
-      startHighScoreEntry();
-    }
   }
 }
 

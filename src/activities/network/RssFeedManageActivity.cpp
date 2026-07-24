@@ -95,12 +95,10 @@ void RssFeedManageActivity::render(RenderLock&&) {
 
     const int deleteAllRowHeight = metrics.listRowHeight;
     const int separatorGap = metrics.verticalSpacing;
-    // Fit tightly to the actual feed count (so the divider sits right under the last
-    // feed, not stretched to the bottom of the available area) but cap at the space
-    // actually available so drawList's own pagination still kicks in for long lists.
-    const int maxFeedListHeight = contentHeight - separatorGap - deleteAllRowHeight;
-    const int feedListHeight =
-        std::min(maxFeedListHeight, std::max(metrics.listRowHeight, static_cast<int>(feedCount) * metrics.listRowHeight));
+    // Matches the main RSS list's feed-region sizing (stretched to fill the
+    // available space above the fixed action row) for a consistent look between
+    // the two screens.
+    const int feedListHeight = std::max(metrics.listRowHeight, contentHeight - separatorGap - deleteAllRowHeight);
 
     GUI.drawList(
         renderer, Rect{0, contentTop, pageWidth, feedListHeight}, static_cast<int>(feedCount),
