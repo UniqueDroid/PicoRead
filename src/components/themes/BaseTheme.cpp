@@ -298,7 +298,12 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
   constexpr int minValueGap = 10;
 
   // Draw all items
-  const auto pageStartIndex = selectedIndex / pageItems * pageItems;
+  // selectedIndex can be -1 ("nothing selected" sentinel, e.g. focus is on a sibling
+  // list). Without clamping, -1 / pageItems truncates to -1 exactly when pageItems
+  // == 1, making pageStartIndex == -1 too - the loop's i then equals selectedIndex on
+  // its first (only) iteration, which flips that row's text to the "selected/inverted"
+  // draw path with no highlight fill behind it: invisible white-on-white text.
+  const auto pageStartIndex = std::max(0, selectedIndex) / pageItems * pageItems;
   for (int i = pageStartIndex; i < itemCount && i < pageStartIndex + pageItems; i++) {
     const int itemY = rect.y + (i % pageItems) * rowHeight;
 

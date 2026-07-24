@@ -6,6 +6,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -257,7 +258,10 @@ void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
   }
 
   // Draw all items
-  const auto pageStartIndex = selectedIndex / pageItems * pageItems;
+  // selectedIndex may be -1 ("nothing selected"); clamp before dividing so the loop's
+  // i never coincidentally equals it when pageItems == 1 (see BaseTheme::drawList for
+  // the full explanation - same bug, invisible inverted-on-nothing text otherwise).
+  const auto pageStartIndex = std::max(0, selectedIndex) / pageItems * pageItems;
   int iconY = (rowSubtitle != nullptr) ? 16 : 10;
   for (int i = pageStartIndex; i < itemCount && i < pageStartIndex + pageItems; i++) {
     const int itemY = rect.y + (i % pageItems) * rowHeight;
