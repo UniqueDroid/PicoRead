@@ -12,4 +12,8 @@ namespace NextBookFinder {
 // bounded regardless of folder size.
 std::vector<std::string> findNextBooks(const std::string& currentBookPath, size_t maxCount);
 
+// Full path of the single closest book file that orders before currentBookPath's
+// filename (natural sort) within the same folder, or "" if there is none.
+std::string findPreviousBook(const std::string& currentBookPath);
+
 }  // namespace NextBookFinder

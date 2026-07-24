@@ -7,10 +7,12 @@
 #include <RssParser.h>
 #include <WiFi.h>
 
+#include <algorithm>
 #include <cstdio>
 
 #include "network/HttpDownloader.h"
 #include "MappedInputManager.h"
+#include "RssFeedManageActivity.h"
 #include "RssFeedStore.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
@@ -19,12 +21,16 @@
 #include "fontIds.h"
 
 namespace {
-std::string rssFeedDir(size_t feedIndex) { return "/.picoread/rss/" + std::to_string(feedIndex); }
 // Dropped onto the SD card root by the user on their PC; see sdcard/rss_feeds_import.json for the format.
 constexpr const char* kImportFilePath = "/rss_feeds_import.json";
 }  // namespace
 
-int RssFeedListActivity::itemCount() const { return fixedRowCount() + static_cast<int>(RSS_STORE.getCount()); }
+int RssFeedListActivity::feedRegionCount() const {
+  const int feedCount = static_cast<int>(RSS_STORE.getCount());
+  return feedCount == 0 ? 1 : feedCount;  // 1 = the "no feeds yet" placeholder row
+}
+
+int RssFeedListActivity::itemCount() const { return feedRegionCount() + actionRowCount(); }
 
 void RssFeedListActivity::onEnter() {
   Activity::onEnter();
@@ -141,7 +147,7 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
     return false;
   }
 
-  const std::string dir = rssFeedDir(feedIndex);
+  const std::string dir = RssFeedStore::articleDirFor(feedIndex);
   Storage.mkdir(dir.c_str(), true);
 
   for (size_t a = 0; a < parser.feedData.articles.size(); a++) {
@@ -168,8 +174,21 @@ void RssFeedListActivity::startImportFlow() {
                          [this](const ActivityResult&) { requestUpdate(); });
 }
 
+void RssFeedListActivity::startManageFeedsFlow() {
+  startActivityForResult(std::make_unique<RssFeedManageActivity>(renderer, mappedInput),
+                         [this](const ActivityResult&) {
+                           // Feed count may have shrunk (deletions) - clamp so the
+                           // selector doesn't point past the end of the new layout.
+                           const int count = itemCount();
+                           if (static_cast<int>(selectorIndex) >= count) {
+                             selectorIndex = count > 0 ? static_cast<size_t>(count - 1) : 0;
+                           }
+                           requestUpdate();
+                         });
+}
+
 void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
-  const std::string dir = rssFeedDir(feedIndex);
+  const std::string dir = RssFeedStore::articleDirFor(feedIndex);
   // Not synced yet (e.g. just imported from SD): the directory doesn't exist,
   // and FileBrowserActivity would silently fall back to the SD root, which
   // reads as "nothing happened" rather than "sync first".
@@ -186,6 +205,8 @@ void RssFeedListActivity::loop() {
   if (state != State::List) return;
 
   const int count = itemCount();
+  const int feedRegion = feedRegionCount();
+  const bool hasFeeds = RSS_STORE.getCount() > 0;
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     onGoHome();
@@ -193,14 +214,26 @@ void RssFeedListActivity::loop() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (selectorIndex == 0) {
-      startAddFeedFlow();
-    } else if (selectorIndex == 1) {
-      startSyncFlow();
-    } else if (selectorIndex == 2) {
-      startImportFlow();
+    if (static_cast<int>(selectorIndex) < feedRegion) {
+      if (hasFeeds) onSelectFeed(selectorIndex);
+      // else: "no feeds yet" placeholder, not actionable
     } else {
-      onSelectFeed(selectorIndex - fixedRowCount());
+      switch (static_cast<int>(selectorIndex) - feedRegion) {
+        case 0:
+          startAddFeedFlow();
+          break;
+        case 1:
+          startSyncFlow();
+          break;
+        case 2:
+          startImportFlow();
+          break;
+        case 3:
+          startManageFeedsFlow();
+          break;
+        default:
+          break;
+      }
     }
     return;
   }
@@ -231,18 +264,47 @@ void RssFeedListActivity::render(RenderLock&&) {
   }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const int contentBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const int feedRegion = feedRegionCount();
+  const bool hasFeeds = RSS_STORE.getCount() > 0;
   const auto& feeds = RSS_STORE.getFeeds();
 
+  const int actionsHeight = actionRowCount() * metrics.listRowHeight;
+  const int separatorGap = metrics.verticalSpacing;
+  const int feedRegionHeight =
+      std::max(metrics.listRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
+
+  const bool feedRegionFocused = static_cast<int>(selectorIndex) < feedRegion;
+
   GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, itemCount(), static_cast<int>(selectorIndex),
-      [&feeds](int index) -> std::string {
-        if (index == 0) return I18N.get(StrId::STR_RSS_ADD_FEED);
-        if (index == 1) return I18N.get(StrId::STR_RSS_SYNC_NOW);
-        if (index == 2) return I18N.get(StrId::STR_RSS_IMPORT_FROM_SD);
-        return feeds[index - fixedRowCount()].title;
+      renderer, Rect{0, contentTop, pageWidth, feedRegionHeight}, feedRegion,
+      feedRegionFocused ? static_cast<int>(selectorIndex) : -1,
+      [&feeds, hasFeeds](int index) -> std::string {
+        if (!hasFeeds) return I18N.get(StrId::STR_RSS_NO_FEEDS);
+        return feeds[index].title;
       },
-      nullptr, [](int index) { return index < fixedRowCount() ? UIIcon::None : UIIcon::Library; });
+      nullptr, [hasFeeds](int) { return hasFeeds ? UIIcon::Library : UIIcon::None; });
+
+  const int separatorY = contentTop + feedRegionHeight + separatorGap / 2;
+  renderer.drawLine(0, separatorY, pageWidth, separatorY);
+
+  const int actionsTop = contentTop + feedRegionHeight + separatorGap;
+  GUI.drawList(
+      renderer, Rect{0, actionsTop, pageWidth, actionsHeight}, actionRowCount(),
+      feedRegionFocused ? -1 : static_cast<int>(selectorIndex) - feedRegion,
+      [](int index) -> std::string {
+        switch (index) {
+          case 0:
+            return I18N.get(StrId::STR_RSS_ADD_FEED);
+          case 1:
+            return I18N.get(StrId::STR_RSS_SYNC_NOW);
+          case 2:
+            return I18N.get(StrId::STR_RSS_IMPORT_FROM_SD);
+          default:
+            return I18N.get(StrId::STR_RSS_MANAGE_FEEDS);
+        }
+      },
+      nullptr, [](int) { return UIIcon::None; });
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

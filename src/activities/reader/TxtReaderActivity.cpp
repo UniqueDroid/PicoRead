@@ -2,6 +2,7 @@
 
 #include <BidiUtils.h>
 #include <FontCacheManager.h>
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -16,6 +17,7 @@
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/NextBookFinder.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -64,34 +66,6 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  // currentPage == totalPages is the "past the last page" sentinel that shows the
-  // end-of-book screen, same convention as XtcReaderActivity/EpubReaderActivity.
-  const bool atEndOfBook = currentPage >= totalPages;
-
-  // While the end screen suggestion menu is showing it owns Confirm/Back/navigation
-  // input; anything it doesn't handle (e.g. long-press Back to the file browser)
-  // falls through to the regular handlers below.
-  if (atEndOfBook && endOfBookOptions.menuActive()) {
-    std::string openPath;
-    switch (endOfBookOptions.handleMenuInput(mappedInput, &openPath)) {
-      case EndOfBookOptions::Action::OpenBook:
-        activityManager.goToReader(openPath);
-        return;
-      case EndOfBookOptions::Action::GoHome:
-        onGoHome();
-        return;
-      case EndOfBookOptions::Action::LastPage:
-        currentPage = totalPages > 0 ? totalPages - 1 : 0;
-        requestUpdate();
-        return;
-      case EndOfBookOptions::Action::Redraw:
-        requestUpdate();
-        return;
-      case EndOfBookOptions::Action::None:
-        break;
-    }
-  }
-
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     activityManager.goToFileBrowser(txt ? txt->getPath() : "");
@@ -110,28 +84,31 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  // At end of book with no suggestion menu, forward goes home and back returns to
-  // the last page.
-  if (atEndOfBook) {
-    if (endOfBookOptions.menuActive()) {
-      // Selection movement was handled above; absorb leftover page-turn triggers.
-      return;
-    }
-    if (nextTriggered) {
-      onGoHome();
-    } else {
-      currentPage = totalPages > 0 ? totalPages - 1 : 0;
-      requestUpdate();
-    }
-    return;
-  }
-
   if (prevTriggered && currentPage > 0) {
     currentPage--;
     requestUpdate();
+  } else if (prevTriggered) {
+    // Paging back past the first page: jump straight into the previous sibling
+    // file in the folder, no intermediate screen. Built for folders of small
+    // standalone files (e.g. synced RSS articles: 0.txt, 1.txt, ...) where a
+    // suggestion menu would just be friction.
+    const std::string prevPath = NextBookFinder::findPreviousBook(txt->getPath());
+    if (!prevPath.empty()) {
+      activityManager.goToReader(prevPath);
+    }
   } else if (nextTriggered) {
-    currentPage++;  // may become == totalPages, the end-of-book sentinel
-    requestUpdate();
+    if (currentPage < totalPages - 1) {
+      currentPage++;
+      requestUpdate();
+    } else {
+      const auto nextNames = NextBookFinder::findNextBooks(txt->getPath(), 1);
+      if (!nextNames.empty()) {
+        const std::string folder = FsHelpers::extractFolderPath(txt->getPath());
+        activityManager.goToReader(folder == "/" ? "/" + nextNames[0] : folder + "/" + nextNames[0]);
+      } else {
+        onGoHome();
+      }
+    }
   }
 }
 
@@ -379,17 +356,7 @@ void TxtReaderActivity::render(RenderLock&&) {
 
   // Bounds check
   if (currentPage < 0) currentPage = 0;
-
-  if (currentPage >= totalPages) {
-    // Show end of book screen (next-book suggestions). Sole load site: runs on the
-    // render task (serialized by RenderLock); the main task only reads the
-    // suggestions once the flag is published. Same pattern as XtcReaderActivity.
-    endOfBookOptions.loadOnce(txt->getPath());
-    renderer.clearScreen();
-    endOfBookOptions.render(renderer, mappedInput);
-    renderer.displayBuffer();
-    return;
-  }
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
 
   // Load current page content
   size_t offset = pageOffsets[currentPage];
@@ -632,12 +599,9 @@ ScreenshotInfo TxtReaderActivity::getScreenshotInfo() const {
     const std::string t = txt->getTitle();
     snprintf(info.title, sizeof(info.title), "%s", t.c_str());
   }
-  // currentPage can sit at the end-of-book sentinel (== totalPages); clamp so the
-  // reported page never exceeds the book, matching XtcReaderActivity.
-  const int clampedPage = (totalPages > 0 && currentPage >= totalPages) ? totalPages - 1 : currentPage;
-  info.currentPage = clampedPage + 1;
+  info.currentPage = currentPage + 1;
   info.totalPages = totalPages;
-  info.progressPercent = totalPages > 0 ? static_cast<int>((clampedPage + 1) * 100.0f / totalPages + 0.5f) : 0;
+  info.progressPercent = totalPages > 0 ? static_cast<int>((currentPage + 1) * 100.0f / totalPages + 0.5f) : 0;
   if (info.progressPercent > 100) info.progressPercent = 100;
   return info;
 }

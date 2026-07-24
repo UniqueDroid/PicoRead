@@ -47,6 +47,13 @@ bool RssFeedStore::removeFeed(size_t index) {
   return saveToFile();
 }
 
+void RssFeedStore::clearAll() {
+  feeds.clear();
+  saveToFile();
+}
+
+std::string RssFeedStore::articleDirFor(size_t feedIndex) { return "/.picoread/rss/" + std::to_string(feedIndex); }
+
 size_t RssFeedStore::importFromFile(const char* path) {
   JsonDocument doc;
   if (!readDocFromFile(path, doc)) {

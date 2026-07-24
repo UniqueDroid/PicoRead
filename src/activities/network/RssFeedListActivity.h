@@ -9,6 +9,10 @@
 // reading. Synced articles are written as plain .txt files under
 // /.picoread/rss/<feedIndex>/ and read via the existing file browser + TXT
 // reader - no dedicated article-reading UI needed.
+//
+// Layout: subscribed feeds on top (or a "no feeds" placeholder), a thin
+// separator, then the fixed actions (Add Feed / Sync Now / Import from SD /
+// Manage Feeds) below.
 class RssFeedListActivity final : public Activity {
   enum class State { List, Busy };
 
@@ -18,7 +22,10 @@ class RssFeedListActivity final : public Activity {
   std::string busyMessage;
   bool shouldTearDownWifiOnExit = false;
 
-  static int fixedRowCount() { return 3; }  // "Add Feed" + "Sync Now" + "Import from SD"
+  // 1 when there are no feeds yet (a non-actionable placeholder row), else one row
+  // per feed.
+  int feedRegionCount() const;
+  static int actionRowCount() { return 4; }  // Add Feed, Sync Now, Import from SD, Manage Feeds
   int itemCount() const;
 
   // Runs action() immediately if WiFi is already connected, otherwise launches
@@ -35,6 +42,8 @@ class RssFeedListActivity final : public Activity {
 
   // Bulk-adds feeds from a JSON file dropped onto the SD card, no WiFi needed.
   void startImportFlow();
+
+  void startManageFeedsFlow();
 
   void onSelectFeed(size_t feedIndex);
 

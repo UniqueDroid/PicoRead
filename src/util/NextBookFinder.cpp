@@ -83,3 +83,55 @@ std::vector<std::string> NextBookFinder::findNextBooks(const std::string& curren
 
   return result;
 }
+
+std::string NextBookFinder::findPreviousBook(const std::string& currentBookPath) {
+  if (currentBookPath.empty()) {
+    return {};
+  }
+
+  const std::string folder = FsHelpers::extractFolderPath(currentBookPath);
+  const auto lastSlash = currentBookPath.find_last_of('/');
+  const std::string currentName =
+      lastSlash == std::string::npos ? currentBookPath : currentBookPath.substr(lastSlash + 1);
+
+  auto dir = Storage.open(folder.c_str());
+  if (!dir || !dir.isDirectory()) {
+    LOG_ERR("NBF", "Cannot open folder: %s", folder.c_str());
+    return {};
+  }
+  dir.rewindDirectory();
+
+  const auto nameBuffer = makeUniqueNoThrow<char[]>(NAME_BUFFER_SIZE);
+  if (!nameBuffer) {
+    LOG_ERR("NBF", "OOM: %d bytes", static_cast<int>(NAME_BUFFER_SIZE));
+    dir.close();
+    return {};
+  }
+
+  std::string best;  // largest name seen so far that still sorts before currentName
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (file.isDirectory()) {
+      continue;
+    }
+    file.getName(nameBuffer.get(), NAME_BUFFER_SIZE);
+    if (!SETTINGS.showHiddenFiles && nameBuffer[0] == '.') {
+      continue;
+    }
+    if (!isSupportedBookFile(nameBuffer.get())) {
+      continue;
+    }
+    std::string name{nameBuffer.get()};
+    if (!FsHelpers::naturalLess(name, currentName)) {
+      continue;  // orders at or after the current file
+    }
+    if (best.empty() || FsHelpers::naturalLess(best, name)) {
+      best = std::move(name);
+    }
+  }
+  dir.close();
+
+  if (best.empty()) {
+    return {};
+  }
+  return folder == "/" ? "/" + best : folder + "/" + best;
+}
