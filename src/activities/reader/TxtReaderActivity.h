@@ -14,6 +14,11 @@ class TxtReaderActivity final : public Activity {
   int totalPages = 1;
   int pagesUntilFullRefresh = 0;
 
+  // For a synced RSS article, shown in the status bar's title slot instead of
+  // Txt::getTitle() (which would just be the bare "0"/"1"/... filename): "N / total"
+  // position within the feed's synced articles, computed once in onEnter().
+  std::string statusBarTitleOverride;
+
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
   std::vector<std::string> currentPageLines;

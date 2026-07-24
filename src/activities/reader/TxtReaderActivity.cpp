@@ -9,7 +9,9 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include <cstdlib>
 #include <cstring>
+#include <string_view>
 
 #include "PicoReadSettings.h"
 #include "PicoReadState.h"
@@ -43,6 +45,23 @@ std::string readFirstLine(const std::string& path) {
   const char* newline = strchr(buf, '\n');
   return newline ? std::string(buf, newline - buf) : std::string(buf, n);
 }
+
+// Counts the synced article files directly in dir (no recursion) - used to show
+// "N / total" in the status bar instead of the bare "0"/"1"/... filename.
+size_t countArticles(const std::string& dir) {
+  auto d = Storage.open(dir.c_str());
+  if (!d || !d.isDirectory()) return 0;
+  d.rewindDirectory();
+  size_t count = 0;
+  char nameBuf[32];
+  for (auto file = d.openNextFile(); file; file = d.openNextFile()) {
+    if (file.isDirectory()) continue;
+    file.getName(nameBuf, sizeof(nameBuf));
+    if (FsHelpers::hasTxtExtension(std::string_view(nameBuf))) count++;
+  }
+  d.close();
+  return count;
+}
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -58,13 +77,27 @@ void TxtReaderActivity::onEnter() {
 
   // Save current txt as last opened file and add to recent books
   auto filePath = txt->getPath();
-  std::string displayTitle = isRssArticle(filePath) ? readFirstLine(filePath) : std::string();
+  const bool fromRssForTitle = isRssArticle(filePath);
+  std::string displayTitle = fromRssForTitle ? readFirstLine(filePath) : std::string();
   if (displayTitle.empty()) {
     displayTitle = filePath.substr(filePath.rfind('/') + 1);
   }
   APP_STATE.openEpubPath = filePath;
   APP_STATE.saveToFile();
   RECENT_BOOKS.addBook(filePath, displayTitle, "", "");
+
+  // "0"/"1"/... filenames are meaningless in the status bar's title slot; show
+  // this article's 1-indexed position among the feed's synced articles instead.
+  if (fromRssForTitle) {
+    const std::string folder = FsHelpers::extractFolderPath(filePath);
+    const int articleIndex = atoi(txt->getTitle().c_str());  // filename sans extension, e.g. "3" for "3.txt"
+    const size_t total = countArticles(folder);
+    if (total > 0) {
+      char buf[24];
+      snprintf(buf, sizeof(buf), "%d / %d", articleIndex + 1, static_cast<int>(total));
+      statusBarTitleOverride = buf;
+    }
+  }
 
   // Trigger first update
   requestUpdate();
@@ -473,7 +506,7 @@ void TxtReaderActivity::renderStatusBar() const {
   const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0;
   std::string title;
   if (SETTINGS.statusBarTitle != PicoReadSettings::STATUS_BAR_TITLE::HIDE_TITLE) {
-    title = txt->getTitle();
+    title = statusBarTitleOverride.empty() ? txt->getTitle() : statusBarTitleOverride;
   }
   GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title);
 }

@@ -204,7 +204,7 @@ void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
     // instead of just bouncing back to the list.
     startActivityForResult(
         std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_FEEDS), tr(STR_RSS_NOT_SYNCED_YET),
-                                               tr(STR_CANCEL), tr(STR_RSS_SYNC_NOW)),
+                                               tr(STR_CANCEL), tr(STR_RSS_SYNC_NOW_SHORT)),
         [this](const ActivityResult& result) {
           if (!result.isCancelled) {
             startSyncFlow();
