@@ -102,15 +102,24 @@ void RssFeedManageActivity::render(RenderLock&&) {
     const int feedListHeight =
         std::min(maxFeedListHeight, std::max(metrics.listRowHeight, static_cast<int>(feedCount) * metrics.listRowHeight));
 
+    // Belt-and-braces: never let the delete-all row start past the bottom of the
+    // content area, regardless of the math above - anchor it from the bottom too
+    // and take whichever position is higher up (i.e. more conservative).
+    const int deleteAllTopFromTop = contentTop + feedListHeight + separatorGap;
+    const int deleteAllTopFromBottom = contentTop + contentHeight - deleteAllRowHeight;
+    const int deleteAllTop = std::min(deleteAllTopFromTop, deleteAllTopFromBottom);
+    const int separatorY = deleteAllTop - separatorGap / 2;
+
+    LOG_DBG("RSS", "manage layout: contentTop=%d contentHeight=%d listRowHeight=%d feedCount=%d feedListHeight=%d deleteAllTop=%d",
+            contentTop, contentHeight, metrics.listRowHeight, static_cast<int>(feedCount), feedListHeight, deleteAllTop);
+
     GUI.drawList(
-        renderer, Rect{0, contentTop, pageWidth, feedListHeight}, static_cast<int>(feedCount),
+        renderer, Rect{0, contentTop, pageWidth, deleteAllTop - separatorGap - contentTop}, static_cast<int>(feedCount),
         feedFocused ? static_cast<int>(selectorIndex) : -1, [&feeds](int index) -> std::string { return feeds[index].title; },
         nullptr, [](int) { return UIIcon::Library; });
 
-    const int separatorY = contentTop + feedListHeight + separatorGap / 2;
     renderer.drawLine(0, separatorY, pageWidth, separatorY);
 
-    const int deleteAllTop = contentTop + feedListHeight + separatorGap;
     GUI.drawList(
         renderer, Rect{0, deleteAllTop, pageWidth, deleteAllRowHeight}, 1, feedFocused ? -1 : 0,
         [](int) -> std::string { return I18N.get(StrId::STR_RSS_DELETE_ALL_FEEDS); }, nullptr,
