@@ -21,7 +21,7 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 7;  // File Browser, Recents, Bookmarks, Flappy, Stats, File transfer, Settings
+  int count = 8;  // File Browser, Recents, Bookmarks, Flappy, Stats, RSS, File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -200,6 +200,9 @@ void HomeActivity::loop() {
         case HomeMenuItem::STATS:
           onReadingStatsOpen();
           break;
+        case HomeMenuItem::RSS_FEEDS:
+          onRssFeedsOpen();
+          break;
         case HomeMenuItem::OPDS_BROWSER:
           onOpdsBrowserOpen();
           break;
@@ -241,14 +244,15 @@ void HomeActivity::render(RenderLock&&) {
 
   // Build menu items dynamically
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
-  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),
-                                        tr(STR_FLAPPY_GAME), tr(STR_READING_STATS), tr(STR_FILE_TRANSFER),
-                                        updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Flappy, Book, Transfer, Settings};
+  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES),  tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),
+                                        tr(STR_FLAPPY_GAME),   tr(STR_READING_STATS),     tr(STR_RSS_FEEDS),
+                                        tr(STR_FILE_TRANSFER), updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE)
+                                                                                : tr(STR_SETTINGS_TITLE)};
+  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Flappy, Book, Library, Transfer, Settings};
 
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 5, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 5, Library);
+    menuItems.insert(menuItems.begin() + 6, tr(STR_OPDS_BROWSER));
+    menuIcons.insert(menuIcons.begin() + 6, Library);
   }
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
@@ -290,6 +294,7 @@ void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 void HomeActivity::onAllBookmarksOpen() { activityManager.goToAllBookmarks(); }
 void HomeActivity::onReadingStatsOpen() { activityManager.goToReadingStats(); }
 void HomeActivity::onFlappyGameOpen() { activityManager.goToFlappyGame(); }
+void HomeActivity::onRssFeedsOpen() { activityManager.goToRssFeeds(); }
 
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 

@@ -24,6 +24,7 @@ enum class HomeMenuItem {
   ALL_BOOKMARKS,
   FLAPPY,
   STATS,
+  RSS_FEEDS,
   OPDS_BROWSER,
   FILE_TRANSFER,
   SETTINGS_MENU
@@ -98,6 +99,7 @@ class ActivityManager {
   void goToAllBookmarks();
   void goToReadingStats();
   void goToFlappyGame();
+  void goToRssFeeds();
   void goToBrowser();
   void goToReader(std::string path);
   void goToSleep(bool fromTimeout = false);
