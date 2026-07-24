@@ -20,7 +20,6 @@
 namespace {
 constexpr int homeMenuMargin = 20;
 constexpr int homeMarginTop = 30;
-constexpr int subtitleY = 735;  // 3px up from 738 per feedback - version text sat too low
 constexpr int bookmarkStatusIconWidth = 16;
 constexpr int bookmarkStatusIconHeight = 14;
 constexpr int bookmarkStatusIconGap = 4;
@@ -377,9 +376,13 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
     auto truncatedSubtitle = renderer.truncatedText(
         SMALL_FONT_ID, subtitle, rect.width - BaseMetrics::values.contentSidePadding * 2, EpdFontFamily::REGULAR);
     int truncatedSubtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedSubtitle.c_str());
+    // Anchored above the button hints bar (not a hardcoded screen-height fraction)
+    // so it clears the hint row on every panel variant, with a comfortable margin.
+    const int dynamicSubtitleY =
+        renderer.getScreenHeight() - BaseMetrics::values.buttonHintsHeight - renderer.getLineHeight(SMALL_FONT_ID);
     renderer.drawText(SMALL_FONT_ID,
-                      rect.x + rect.width - BaseMetrics::values.contentSidePadding - truncatedSubtitleWidth, subtitleY,
-                      truncatedSubtitle.c_str(), true);
+                      rect.x + rect.width - BaseMetrics::values.contentSidePadding - truncatedSubtitleWidth,
+                      dynamicSubtitleY, truncatedSubtitle.c_str(), true);
   }
 }
 
