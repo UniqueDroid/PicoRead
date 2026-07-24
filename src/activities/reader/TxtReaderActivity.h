@@ -4,11 +4,13 @@
 
 #include <vector>
 
+#include "EndOfBookOptions.h"
 #include "PicoReadSettings.h"
 #include "activities/Activity.h"
 
 class TxtReaderActivity final : public Activity {
   std::unique_ptr<Txt> txt;
+  EndOfBookOptions endOfBookOptions;
 
   int currentPage = 0;
   int totalPages = 1;
