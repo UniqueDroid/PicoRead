@@ -67,33 +67,9 @@ void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonC
   const int tileWidth = (usableWidth - kGap * (kColumns - 1)) / kColumns;
   const int tileHeight = kTileHeight;
 
-  // rect.height as passed by HomeActivity doesn't account for homeCoverTileHeight
-  // (see the same fix applied to BaseTheme/LyraTheme/RoundedRaffTheme's
-  // drawButtonMenu/drawList - this bug isn't specific to one theme's math, it's in
-  // what the caller passes), so derive real available space independently rather
-  // than trust it here too.
-  const int availableHeight = renderer.getScreenHeight() - rect.y - PicoReadMetrics::values.buttonHintsHeight;
-  const int rowHeight = tileHeight + kGap;
-  int visibleRows = availableHeight / rowHeight;
-  if (visibleRows < 1) visibleRows = 1;
-
-  const int totalRows = (buttonCount + kColumns - 1) / kColumns;
-  const int selectedRow = std::max(0, selectedIndex) / kColumns;
-
-  // Sliding window, not fixed pages: shows rows [0, visibleRows) until the
-  // selection moves past the visible bottom edge, then the window follows by the
-  // minimum needed - one row at a time, same continuous feel as the other themes'
-  // list scrolling, no page jump and no separate arrow indicator needed.
-  int windowStartRow = std::max(0, selectedRow - visibleRows + 1);
-  windowStartRow = std::min(windowStartRow, std::max(0, totalRows - visibleRows));
-
-  const int itemStart = windowStartRow * kColumns;
-  const int itemEnd = std::min(buttonCount, itemStart + visibleRows * kColumns);
-
-  for (int i = itemStart; i < itemEnd; ++i) {
-    const int posInWindow = i - itemStart;
-    const int col = posInWindow % kColumns;
-    const int row = posInWindow / kColumns;
+  for (int i = 0; i < buttonCount; ++i) {
+    const int col = i % kColumns;
+    const int row = i / kColumns;
     const int tileX = rect.x + kSidePadding + col * (tileWidth + kGap);
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
