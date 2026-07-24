@@ -82,6 +82,17 @@ The RSS tile on the home screen manages a small offline feed reader. Subscribed 
 
   `url` is required; `title` is optional — if omitted, the feed URL is used as the display name until the next sync, which fills in the real title from the feed itself.
 
+  A few ready-made feed lists are also included, so you don't have to hunt down URLs yourself:
+
+  | File | Contents |
+  |---|---|
+  | [`sdcard/rss_feeds_import_NEWS_DE.json`](./sdcard/rss_feeds_import_NEWS_DE.json) | German general news (Tagesschau, SPIEGEL, ZEIT, FAZ, SZ, n-tv, WELT, stern, FOCUS, ZDFheute) |
+  | [`sdcard/rss_feeds_import_NEWS_EN.json`](./sdcard/rss_feeds_import_NEWS_EN.json) | English general news (BBC, NYT, The Guardian, CNN, Washington Post, NPR, ABC News, Al Jazeera, TIME, Financial Times) |
+  | [`sdcard/rss_feeds_import_TECHNEWS_DE.json`](./sdcard/rss_feeds_import_TECHNEWS_DE.json) | German tech news (heise, Golem, ComputerBase, t3n, CHIP, WinFuture, Caschys Blog, PCGH, Hardwareluxx, Notebookcheck) |
+  | [`sdcard/rss_feeds_import_TECHNEWS_EN.json`](./sdcard/rss_feeds_import_TECHNEWS_EN.json) | English tech news (Ars Technica, The Verge, TechCrunch, Wired, Engadget, CNET, Tom's Hardware, VentureBeat, 9to5Mac, ZDNET) |
+  | [`sdcard/rss_feeds_import_TECHNEWS_AND_NEWS_DE.json`](./sdcard/rss_feeds_import_TECHNEWS_AND_NEWS_DE.json) | The two German lists above combined (20 feeds) |
+  | [`sdcard/rss_feeds_import_TECHNEWS_AND_NEWS_EN.json`](./sdcard/rss_feeds_import_TECHNEWS_AND_NEWS_EN.json) | The two English lists above combined (20 feeds) |
+
 - **Manage Feeds** — lists every feed for one-tap removal, plus a "Delete All Feeds" row to clear everything at once.
 
 Tapping a synced feed opens its first article directly — no folder listing in between. Paging past the first/last page of an article jumps straight into the previous/next one, and the status bar shows your position in the feed ("3 / 12"). Back returns to the RSS overview instead of Home. Synced articles live under `.picoread/rss/<feed-name>/` (folder named after the feed, sanitized for the SD card's filesystem) and follow the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).

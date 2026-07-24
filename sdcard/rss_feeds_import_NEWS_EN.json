@@ -1,0 +1,44 @@
+{
+  "feeds": [
+    {
+      "url": "http://feeds.bbci.co.uk/news/rss.xml",
+      "title": "BBC News"
+    },
+    {
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+      "title": "The New York Times"
+    },
+    {
+      "url": "https://www.theguardian.com/world/rss",
+      "title": "The Guardian"
+    },
+    {
+      "url": "http://rss.cnn.com/rss/edition.rss",
+      "title": "CNN"
+    },
+    {
+      "url": "https://feeds.washingtonpost.com/rss/national",
+      "title": "The Washington Post"
+    },
+    {
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "title": "NPR News"
+    },
+    {
+      "url": "https://feeds.abcnws.com/abcnews/topstories",
+      "title": "ABC News"
+    },
+    {
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "title": "Al Jazeera English"
+    },
+    {
+      "url": "https://time.com/feed/",
+      "title": "TIME Magazine"
+    },
+    {
+      "url": "https://www.ft.com/rss/world",
+      "title": "Financial Times"
+    }
+  ]
+}

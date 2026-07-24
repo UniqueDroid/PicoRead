@@ -1,0 +1,44 @@
+{
+  "feeds": [
+    {
+      "url": "https://www.heise.de/rss/heise-atom.xml",
+      "title": "heise online"
+    },
+    {
+      "url": "https://rss.golem.de/rss.vu?feed=RSS2.0",
+      "title": "Golem.de"
+    },
+    {
+      "url": "https://www.computerbase.de/rss/news.xml",
+      "title": "ComputerBase"
+    },
+    {
+      "url": "https://t3n.de/rss.xml",
+      "title": "t3n"
+    },
+    {
+      "url": "https://www.chip.de/rss/rss_topthemen.xml",
+      "title": "CHIP Online"
+    },
+    {
+      "url": "https://winfuture.de/news,rss.feed",
+      "title": "WinFuture"
+    },
+    {
+      "url": "https://stadt-bremerhaven.de/feed/",
+      "title": "Caschys Blog"
+    },
+    {
+      "url": "https://www.pcgameshardware.de/feed.cfm?menu=2",
+      "title": "PC Games Hardware"
+    },
+    {
+      "url": "https://www.hardwareluxx.de/index.php/rss/hardwareluxx-news.xml",
+      "title": "Hardwareluxx"
+    },
+    {
+      "url": "https://www.notebookcheck.com/rss/news.xml",
+      "title": "Notebookcheck"
+    }
+  ]
+}

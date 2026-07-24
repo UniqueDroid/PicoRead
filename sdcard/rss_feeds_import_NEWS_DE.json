@@ -1,0 +1,44 @@
+{
+  "feeds": [
+    {
+      "url": "https://www.tagesschau.de/xml/rss2",
+      "title": "Tagesschau"
+    },
+    {
+      "url": "https://www.spiegel.de/index.rss",
+      "title": "SPIEGEL Online"
+    },
+    {
+      "url": "https://newsfeed.zeit.de/index",
+      "title": "ZEIT ONLINE"
+    },
+    {
+      "url": "https://www.faz.net/rss/aktuell/",
+      "title": "FAZ.NET"
+    },
+    {
+      "url": "https://rss.sueddeutsche.de/rss/Topthemen",
+      "title": "Süddeutsche Zeitung"
+    },
+    {
+      "url": "https://www.n-tv.de/rss",
+      "title": "n-tv Nachrichten"
+    },
+    {
+      "url": "https://www.welt.de/feeds/latest.rss",
+      "title": "WELT"
+    },
+    {
+      "url": "https://www.stern.de/feed/standard/alle-nachrichten/",
+      "title": "stern.de"
+    },
+    {
+      "url": "https://rss.focus.de/fol/XML/rss_folnews.xml",
+      "title": "FOCUS online"
+    },
+    {
+      "url": "https://www.zdf.de/rss/zdf/nachrichten",
+      "title": "ZDFheute"
+    }
+  ]
+}

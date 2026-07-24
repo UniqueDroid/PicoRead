@@ -1,0 +1,44 @@
+{
+  "feeds": [
+    {
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "title": "Ars Technica"
+    },
+    {
+      "url": "https://www.theverge.com/rss/index.xml",
+      "title": "The Verge"
+    },
+    {
+      "url": "https://techcrunch.com/feed/",
+      "title": "TechCrunch"
+    },
+    {
+      "url": "https://www.wired.com/feed/rss",
+      "title": "Wired"
+    },
+    {
+      "url": "https://www.engadget.com/rss.xml",
+      "title": "Engadget"
+    },
+    {
+      "url": "https://www.cnet.com/rss/news/",
+      "title": "CNET"
+    },
+    {
+      "url": "https://www.tomshardware.com/feeds/all",
+      "title": "Tom's Hardware"
+    },
+    {
+      "url": "https://venturebeat.com/feed/",
+      "title": "VentureBeat"
+    },
+    {
+      "url": "https://9to5mac.com/feed/",
+      "title": "9to5Mac"
+    },
+    {
+      "url": "https://www.zdnet.com/news/rss.xml",
+      "title": "ZDNET"
+    }
+  ]
+}
