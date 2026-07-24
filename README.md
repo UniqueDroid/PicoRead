@@ -17,6 +17,11 @@ On top of that, this fork so far adds:
 - **Offline dictionary lookup** — inline word lookup in the reader menu using FreeDict dictionaries you install yourself.
 - **A working PDF trick, no firmware bloat** — the reader has always been able to flip through a folder of `.bmp` images with the Left/Right buttons. Export a PDF's pages as images on your computer, drop them in one folder on the SD card, and you've got a readable "PDF" with zero code changes and zero flash cost.
 - **A leaner EPUB Optimizer** — it now strips embedded fonts on request, since the reader never uses `@font-face` anyway and those files are pure dead weight in most EPUBs.
+- **PicoRead theme** — a new default theme with a 2-column tile home screen and a 3-cover "Continue Reading" strip up top, alongside the existing Classic/Lyra/RoundedRaff themes (pick any of them in Settings > Display).
+- **Reading Statistics** — a home-screen tile with per-book stats (sessions, reading time, pages turned, average session length, pages/minute) plus an "All Books" aggregate card.
+- **RSS Reader** — subscribe to feeds, sync them over Wi-Fi, and read articles fully offline afterwards. See [RSS Reader](#rss-reader) below.
+- **Restart / Shut Down** — both are now one tap away in Settings > System instead of requiring a button-combo or waiting out the sleep timer.
+- **Flappy** — a slow-tick, e-ink-appropriate take on Flappy Bird for killing 5 minutes between chapters. Home screen tile, one button to flap.
 
 More to come as I find time. See [Credits](#credits) for the full attribution.
 
@@ -50,6 +55,34 @@ esptool.py --chip esp32c3 --port /dev/ttyACM0 --baud 921600 write_flash 0x10000 
 **Want to go back to stock CrossPoint?** Same web flasher, https://crosspointreader.com/#flash-tools, pick the official release instead of a custom `.bin`.
 
 Building it yourself instead of downloading a release? Jump to [Development](#development) below.
+
+---
+
+## RSS Reader
+
+The RSS tile on the home screen manages a small offline feed reader:
+
+- **Add Feed** — enter a feed URL (RSS 2.0 or Atom) on-device via the on-screen keyboard. Connects to Wi-Fi automatically if you're not already connected.
+- **Sync Now** — re-fetches every subscribed feed and saves its articles to the SD card as plain `.txt` files (title, link, then the article text with HTML stripped). No EPUB generation involved — it reuses the existing file browser and `.txt` reader, so there's no new reading UI or extra RAM cost.
+- **Import from SD Card** — bulk-add feeds from a JSON file at `/rss_feeds_import.json` on the SD card root, no Wi-Fi needed for this step. Handy for setting up a batch of feeds from a computer instead of typing each URL on-device. A sample file is at [`sdcard/rss_feeds_import.json`](./sdcard/rss_feeds_import.json):
+
+  ```json
+  {
+    "feeds": [
+      {
+        "url": "https://www.heise.de/rss/heise-atom.xml",
+        "title": "heise online"
+      },
+      {
+        "url": "https://www.tagesschau.de/xml/rss2"
+      }
+    ]
+  }
+  ```
+
+  `url` is required; `title` is optional — if omitted, the feed URL is used as the display name until the next sync, which fills in the real title from the feed itself.
+
+Once synced, tap a feed in the list to browse its articles like any other folder — each article is just a `.txt` file, openable offline like any book on the card. Synced content lives under `.picoread/rss/<feedIndex>/` and follows the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
 
 ---
 
