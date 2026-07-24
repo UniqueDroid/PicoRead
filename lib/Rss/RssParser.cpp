@@ -37,7 +37,7 @@ void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char**
   }
 
   if (p->state == State::Channel && (strcmp(name, "item") == 0 || strcmp(name, "entry") == 0)) {
-    if (p->feedData.articles.size() >= MAX_ARTICLES) return;  // ignore further items, cap already reached
+    if (p->articleCount >= MAX_ARTICLES) return;  // ignore further items, cap already reached
     p->state = State::Item;
     p->current = RssArticle{};
     return;
@@ -109,9 +109,16 @@ void XMLCALL endElement(void* userData, const XML_Char* name) {
     return;
   }
   if (p->state == State::Item && (strcmp(name, "item") == 0 || strcmp(name, "entry") == 0)) {
-    if (!p->current.title.empty() && p->feedData.articles.size() < MAX_ARTICLES) {
+    if (!p->current.title.empty() && p->articleCount < MAX_ARTICLES) {
       p->current.description = stripHtml(p->current.description);
-      p->feedData.articles.push_back(std::move(p->current));
+      p->articleCount++;
+      // With a handler set, the article is written out (e.g. to SD) and discarded
+      // here instead of accumulating in feedData.articles - see RssParser.h.
+      if (p->articleHandler) {
+        p->articleHandler(p->current);
+      } else {
+        p->feedData.articles.push_back(std::move(p->current));
+      }
     }
     p->state = State::Channel;
     return;

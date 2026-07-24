@@ -20,9 +20,14 @@ class ConfirmationActivity : public Activity {
   int startY = 0;
   int lineHeight = 0;
 
+ private:
+  // Empty means the default STR_CANCEL/STR_CONFIRM labels (see render()).
+  std::string cancelLabel;
+  std::string confirmLabel;
+
  public:
   ConfirmationActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& heading,
-                       const std::string& body);
+                       const std::string& body, std::string cancelLabel = "", std::string confirmLabel = "");
 
   void onEnter() override;
   void loop() override;

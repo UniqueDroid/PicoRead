@@ -135,7 +135,30 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   const auto& feeds = RSS_STORE.getFeeds();
   if (feedIndex >= feeds.size()) return false;
 
+  const std::string dir = RssFeedStore::articleDirFor(feedIndex);
+  Storage.mkdir(dir.c_str(), true);
+
+  // Articles are written to SD as soon as each one finishes parsing, instead of
+  // collecting them into feedData.articles first - some feeds run to dozens of
+  // full-length posts, which doesn't fit in this device's heap if held all at
+  // once (confirmed via crash reports even with per-field/article caps in
+  // place). See RssParser.h.
+  size_t articleIndex = 0;
   RssParser parser;
+  parser.setArticleHandler([&dir, &articleIndex](const RssArticle& article) {
+    const std::string path = dir + "/" + std::to_string(articleIndex) + ".txt";
+    articleIndex++;
+    HalFile file;
+    if (!Storage.openFileForWrite("RSS", path, file)) return;
+    file.write(reinterpret_cast<const uint8_t*>(article.title.data()), article.title.size());
+    file.write(reinterpret_cast<const uint8_t*>("\n\n"), 2);
+    if (!article.link.empty()) {
+      file.write(reinterpret_cast<const uint8_t*>(article.link.data()), article.link.size());
+      file.write(reinterpret_cast<const uint8_t*>("\n\n"), 2);
+    }
+    file.write(reinterpret_cast<const uint8_t*>(article.description.data()), article.description.size());
+  });
+
   const bool fetchOk = HttpDownloader::fetchUrl(
       feeds[feedIndex].url, [&parser](const uint8_t* data, size_t len) { return parser.feed(data, len); });
   if (!fetchOk) {
@@ -145,23 +168,6 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   if (!parser.finish()) {
     LOG_ERR("RSS", "Sync parse failed: %s", feeds[feedIndex].url.c_str());
     return false;
-  }
-
-  const std::string dir = RssFeedStore::articleDirFor(feedIndex);
-  Storage.mkdir(dir.c_str(), true);
-
-  for (size_t a = 0; a < parser.feedData.articles.size(); a++) {
-    const auto& article = parser.feedData.articles[a];
-    const std::string path = dir + "/" + std::to_string(a) + ".txt";
-    HalFile file;
-    if (!Storage.openFileForWrite("RSS", path, file)) continue;
-    file.write(reinterpret_cast<const uint8_t*>(article.title.data()), article.title.size());
-    file.write(reinterpret_cast<const uint8_t*>("\n\n"), 2);
-    if (!article.link.empty()) {
-      file.write(reinterpret_cast<const uint8_t*>(article.link.data()), article.link.size());
-      file.write(reinterpret_cast<const uint8_t*>("\n\n"), 2);
-    }
-    file.write(reinterpret_cast<const uint8_t*>(article.description.data()), article.description.size());
   }
   return true;
 }
@@ -194,10 +200,18 @@ void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
   // Back from inside an article returns here rather than to a file browser.
   const std::string firstArticle = RssFeedStore::articleDirFor(feedIndex) + "/0.txt";
   if (!Storage.exists(firstArticle.c_str())) {
-    // Not synced yet (e.g. just imported from SD): nothing to open yet.
+    // Not synced yet (e.g. just imported from SD): offer to sync right away
+    // instead of just bouncing back to the list.
     startActivityForResult(
-        std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_FEEDS), tr(STR_RSS_NOT_SYNCED_YET)),
-        [this](const ActivityResult&) { requestUpdate(); });
+        std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_FEEDS), tr(STR_RSS_NOT_SYNCED_YET),
+                                               tr(STR_CANCEL), tr(STR_RSS_SYNC_NOW)),
+        [this](const ActivityResult& result) {
+          if (!result.isCancelled) {
+            startSyncFlow();
+          } else {
+            requestUpdate();
+          }
+        });
     return;
   }
   activityManager.goToReader(firstArticle);

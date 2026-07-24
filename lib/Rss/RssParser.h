@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -10,7 +11,7 @@ struct RssArticle {
 
 struct RssFeedData {
   std::string title;
-  std::vector<RssArticle> articles;
+  std::vector<RssArticle> articles;  // only populated when no ArticleHandler is set, see below
 };
 
 /**
@@ -22,8 +23,16 @@ struct RssFeedData {
  * on a ~380KB-RAM ESP32-C3 a single feed like that can fail the reallocation
  * outright and abort() the firmware. Feed this parser via feed() from
  * HttpDownloader's DataCallback overload instead, so the raw XML is never
- * held in memory as one contiguous buffer. Per-field/article caps in the
- * .cpp additionally bound worst-case RAM use regardless of feed size.
+ * held in memory as one contiguous buffer.
+ *
+ * The same problem applies one level up: collecting every parsed article into
+ * feedData.articles before writing anything out can itself exceed the
+ * available heap for feeds with many full-length posts (confirmed via two
+ * device crash reports - the per-field/per-article caps in the .cpp bounded
+ * each dimension individually but not their product). Set an ArticleHandler
+ * to be called once per completed <item>/<entry> instead - e.g. write it
+ * straight to SD and let it go out of scope - so RAM never holds more than
+ * one article's worth of text regardless of feed size.
  */
 class RssParser {
  public:
@@ -31,6 +40,9 @@ class RssParser {
   ~RssParser();
   RssParser(const RssParser&) = delete;
   RssParser& operator=(const RssParser&) = delete;
+
+  using ArticleHandler = std::function<void(const RssArticle&)>;
+  void setArticleHandler(ArticleHandler handler) { articleHandler = std::move(handler); }
 
   // Feed one chunk of the response as it arrives. Returns false on an XML
   // parse error - stop calling feed() and treat the parse as failed.
@@ -55,6 +67,8 @@ class RssParser {
   };
   State state = State::Root;
   RssArticle current;
+  size_t articleCount = 0;  // completed articles so far, whether handled or stored
+  ArticleHandler articleHandler;
 
  private:
   void* parser = nullptr;  // XML_Parser (expat.h stays out of the header)
