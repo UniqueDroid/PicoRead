@@ -22,20 +22,13 @@ void RssFeedManageActivity::onEnter() {
 }
 
 void RssFeedManageActivity::deleteFeed(const size_t feedIndex) {
-  const size_t countBefore = RSS_STORE.getCount();
-  if (feedIndex >= countBefore) return;
+  if (feedIndex >= RSS_STORE.getCount()) return;
 
+  // Folder names are derived from the feed's own title (see
+  // RssFeedStore::articleDirFor), not its list position, so removing one feed
+  // never disturbs any other feed's folder.
   Storage.removeDir(RssFeedStore::articleDirFor(feedIndex).c_str());
   RSS_STORE.removeFeed(feedIndex);
-
-  // Article folders are index-addressed; renumber everything after the removed
-  // feed down by one so folder N still matches feed N.
-  for (size_t i = feedIndex + 1; i < countBefore; i++) {
-    const std::string oldDir = RssFeedStore::articleDirFor(i);
-    if (Storage.exists(oldDir.c_str())) {
-      Storage.rename(oldDir.c_str(), RssFeedStore::articleDirFor(i - 1).c_str());
-    }
-  }
 
   if (selectorIndex > 0) selectorIndex--;
   requestUpdate();

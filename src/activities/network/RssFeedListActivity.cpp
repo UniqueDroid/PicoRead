@@ -188,17 +188,19 @@ void RssFeedListActivity::startManageFeedsFlow() {
 }
 
 void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
-  const std::string dir = RssFeedStore::articleDirFor(feedIndex);
-  // Not synced yet (e.g. just imported from SD): the directory doesn't exist,
-  // and FileBrowserActivity would silently fall back to the SD root, which
-  // reads as "nothing happened" rather than "sync first".
-  if (!Storage.exists(dir.c_str())) {
+  // Straight into the first article - no folder listing detour. Article file
+  // names are plain indices (0.txt, 1.txt, ...) not meant for manual browsing;
+  // TxtReaderActivity's own paging (see NextBookFinder) moves between them, and
+  // Back from inside an article returns here rather than to a file browser.
+  const std::string firstArticle = RssFeedStore::articleDirFor(feedIndex) + "/0.txt";
+  if (!Storage.exists(firstArticle.c_str())) {
+    // Not synced yet (e.g. just imported from SD): nothing to open yet.
     startActivityForResult(
         std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_FEEDS), tr(STR_RSS_NOT_SYNCED_YET)),
         [this](const ActivityResult&) { requestUpdate(); });
     return;
   }
-  activityManager.goToFileBrowser(dir);
+  activityManager.goToReader(firstArticle);
 }
 
 void RssFeedListActivity::loop() {

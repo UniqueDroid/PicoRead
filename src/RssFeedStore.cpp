@@ -1,5 +1,6 @@
 #include "RssFeedStore.h"
 
+#include <FsHelpers.h>
 #include <Logging.h>
 
 #include <algorithm>
@@ -52,7 +53,38 @@ void RssFeedStore::clearAll() {
   saveToFile();
 }
 
-std::string RssFeedStore::articleDirFor(size_t feedIndex) { return "/.picoread/rss/" + std::to_string(feedIndex); }
+namespace {
+std::string sanitizedSlug(const std::string& raw) {
+  char buf[64];
+  FsHelpers::sanitizePathComponentForFat32(raw.c_str(), buf, sizeof(buf));
+  std::string slug(buf);
+  return slug.empty() ? "feed" : slug;
+}
+}  // namespace
+
+std::string RssFeedStore::articleDirFor(size_t feedIndex) {
+  const auto& feeds = getInstance().feeds;
+  if (feedIndex >= feeds.size()) {
+    return "/.picoread/rss/" + std::to_string(feedIndex);  // shouldn't happen; keeps a valid path
+  }
+
+  const std::string& raw = feeds[feedIndex].title.empty() ? feeds[feedIndex].url : feeds[feedIndex].title;
+  const std::string base = sanitizedSlug(raw);
+
+  // Disambiguate against identically-sanitized earlier feeds so folders stay unique -
+  // folder names are otherwise stable across add/remove since they don't encode index.
+  std::string candidate = base;
+  int suffix = 1;
+  for (size_t i = 0; i < feedIndex; i++) {
+    const std::string& otherRaw = feeds[i].title.empty() ? feeds[i].url : feeds[i].title;
+    if (candidate == sanitizedSlug(otherRaw)) {
+      suffix++;
+      candidate = base + "-" + std::to_string(suffix);
+    }
+  }
+
+  return "/.picoread/rss/" + candidate;
+}
 
 size_t RssFeedStore::importFromFile(const char* path) {
   JsonDocument doc;

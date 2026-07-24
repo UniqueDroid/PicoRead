@@ -9,6 +9,8 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include <cstring>
+
 #include "PicoReadSettings.h"
 #include "PicoReadState.h"
 #include "MappedInputManager.h"
@@ -24,6 +26,23 @@ constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
 constexpr uint8_t CACHE_VERSION = 3;          // Increment when cache format changes
+
+constexpr const char* kRssArticlesPrefix = "/.picoread/rss/";
+bool isRssArticle(const std::string& path) { return path.rfind(kRssArticlesPrefix, 0) == 0; }
+
+// Synced articles are written as "title\n\nlink\n\ndescription" (see
+// RssFeedListActivity::syncOneFeed) - read just the first line for a human title
+// instead of the bare "0.txt" filename Recents/the 3-cover carousel would
+// otherwise show.
+std::string readFirstLine(const std::string& path) {
+  HalFile file;
+  if (!Storage.openFileForRead("TRS", path, file)) return "";
+  char buf[200];
+  const size_t n = file.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf) - 1);
+  buf[n] = '\0';
+  const char* newline = strchr(buf, '\n');
+  return newline ? std::string(buf, newline - buf) : std::string(buf, n);
+}
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -39,10 +58,13 @@ void TxtReaderActivity::onEnter() {
 
   // Save current txt as last opened file and add to recent books
   auto filePath = txt->getPath();
-  auto fileName = filePath.substr(filePath.rfind('/') + 1);
+  std::string displayTitle = isRssArticle(filePath) ? readFirstLine(filePath) : std::string();
+  if (displayTitle.empty()) {
+    displayTitle = filePath.substr(filePath.rfind('/') + 1);
+  }
   APP_STATE.openEpubPath = filePath;
   APP_STATE.saveToFile();
-  RECENT_BOOKS.addBook(filePath, fileName, "", "");
+  RECENT_BOOKS.addBook(filePath, displayTitle, "", "");
 
   // Trigger first update
   requestUpdate();
@@ -66,16 +88,28 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  // Long press BACK (1s+) goes to file selection
+  const bool fromRss = txt && isRssArticle(txt->getPath());
+
+  // Long press BACK (1s+) goes to file selection - or, for a synced RSS article,
+  // back to the RSS overview (its folder is just numbered .txt files, not meant
+  // for manual browsing).
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
-    activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+    if (fromRss) {
+      activityManager.goToRssFeeds();
+    } else {
+      activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+    }
     return;
   }
 
-  // Short press BACK goes directly to home
+  // Short press BACK goes directly to home (or the RSS overview for an article)
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
-    onGoHome();
+    if (fromRss) {
+      activityManager.goToRssFeeds();
+    } else {
+      onGoHome();
+    }
     return;
   }
 
@@ -105,6 +139,8 @@ void TxtReaderActivity::loop() {
       if (!nextNames.empty()) {
         const std::string folder = FsHelpers::extractFolderPath(txt->getPath());
         activityManager.goToReader(folder == "/" ? "/" + nextNames[0] : folder + "/" + nextNames[0]);
+      } else if (fromRss) {
+        activityManager.goToRssFeeds();
       } else {
         onGoHome();
       }
