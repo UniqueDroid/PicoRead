@@ -34,6 +34,7 @@ class FlappyGameActivity final : public Activity {
   void resetGame();
   void tick();
   void spawnPipe();
+  void startHighScoreEntry();
 
  public:
   explicit FlappyGameActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

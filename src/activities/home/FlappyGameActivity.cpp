@@ -6,7 +6,9 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "FlappyHighScoreStore.h"
 #include "MappedInputManager.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "components/icons/flappy.h"
 #include "fontIds.h"
@@ -74,6 +76,22 @@ void FlappyGameActivity::onEnter() {
   requestUpdate();
 }
 
+void FlappyGameActivity::startHighScoreEntry() {
+  const std::string prefill = FLAPPY_SCORES.getLastPlayerName();
+  startActivityForResult(
+      std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_FLAPPY_HIGH_SCORE_NAME), prefill, 16,
+                                              InputType::Text),
+      [this](const ActivityResult& result) {
+        if (!result.isCancelled) {
+          const auto& kb = std::get<KeyboardResult>(result.data);
+          if (!kb.text.empty()) {
+            FLAPPY_SCORES.addScore(kb.text, score);
+          }
+        }
+        requestUpdate();
+      });
+}
+
 void FlappyGameActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     onGoHome();
@@ -92,8 +110,12 @@ void FlappyGameActivity::loop() {
   const unsigned long now = millis();
   if (now - lastTickMs >= TICK_MS) {
     lastTickMs = now;
+    const bool wasGameOver = gameOver;
     tick();
     requestUpdate();
+    if (!wasGameOver && gameOver && FLAPPY_SCORES.qualifies(score)) {
+      startHighScoreEntry();
+    }
   }
 }
 
@@ -114,6 +136,23 @@ void FlappyGameActivity::render(RenderLock&&) {
     renderer.fillRect(pipeScreenX, contentTop, PIPE_WIDTH, pipeGapY);
     renderer.fillRect(pipeScreenX, contentTop + pipeGapY + PIPE_GAP_HEIGHT, PIPE_WIDTH,
                       contentHeight - pipeGapY - PIPE_GAP_HEIGHT);
+  }
+
+  // Before the first flap, the pipe hasn't started moving and the field is otherwise
+  // empty - show the local high score board there instead of blank space.
+  if (!started && !gameOver) {
+    const auto& scores = FLAPPY_SCORES.getScores();
+    if (!scores.empty()) {
+      int listY = contentTop + 50;
+      renderer.drawCenteredText(UI_10_FONT_ID, listY, tr(STR_FLAPPY_HIGH_SCORES), true, EpdFontFamily::BOLD);
+      listY += 30;
+      for (size_t i = 0; i < scores.size(); i++) {
+        char rowBuf[48];
+        snprintf(rowBuf, sizeof(rowBuf), "%d. %s - %d", static_cast<int>(i + 1), scores[i].name.c_str(), scores[i].score);
+        renderer.drawCenteredText(UI_10_FONT_ID, listY, rowBuf);
+        listY += 26;
+      }
+    }
   }
 
   renderer.drawIcon(FlappyIconGame, fieldX + BIRD_X, contentTop + birdY, BIRD_SIZE);
