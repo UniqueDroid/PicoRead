@@ -173,11 +173,26 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
 }
 
 void RssFeedListActivity::startImportFlow() {
-  const size_t imported = RSS_STORE.importFromFile(kImportFilePath);
-  char buf[64];
-  snprintf(buf, sizeof(buf), tr(STR_RSS_IMPORT_RESULT_FORMAT), static_cast<int>(imported));
-  startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_IMPORT_FROM_SD), buf),
-                         [this](const ActivityResult&) { requestUpdate(); });
+  // Preview first - Cancel bails out without touching anything, Confirm actually
+  // imports. importFromFile() used to run unconditionally the moment this row was
+  // tapped, with no way to back out.
+  const size_t previewCount = RSS_STORE.previewImportCount(kImportFilePath);
+  char previewBuf[64];
+  snprintf(previewBuf, sizeof(previewBuf), tr(STR_RSS_IMPORT_PREVIEW_FORMAT), static_cast<int>(previewCount));
+  startActivityForResult(
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_IMPORT_FROM_SD), previewBuf),
+      [this](const ActivityResult& previewResult) {
+        if (previewResult.isCancelled) {
+          requestUpdate();
+          return;
+        }
+        const size_t imported = RSS_STORE.importFromFile(kImportFilePath);
+        char resultBuf[64];
+        snprintf(resultBuf, sizeof(resultBuf), tr(STR_RSS_IMPORT_RESULT_FORMAT), static_cast<int>(imported));
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_IMPORT_FROM_SD), resultBuf),
+            [this](const ActivityResult&) { requestUpdate(); });
+      });
 }
 
 void RssFeedListActivity::startManageFeedsFlow() {

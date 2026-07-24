@@ -86,6 +86,21 @@ std::string RssFeedStore::articleDirFor(size_t feedIndex) {
   return "/.picoread/rss/" + candidate;
 }
 
+size_t RssFeedStore::previewImportCount(const char* path) const {
+  JsonDocument doc;
+  if (!readDocFromFile(path, doc)) {
+    return 0;
+  }
+
+  size_t count = 0;
+  JsonArrayConst arr = doc["feeds"].as<JsonArrayConst>();
+  for (JsonObjectConst obj : arr) {
+    const char* url = obj["url"] | "";
+    if (url && url[0] != '\0') count++;
+  }
+  return count;
+}
+
 size_t RssFeedStore::importFromFile(const char* path) {
   JsonDocument doc;
   if (!readDocFromFile(path, doc)) {

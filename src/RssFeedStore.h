@@ -32,16 +32,20 @@ class RssFeedStore : public PersistableStore<RssFeedStore> {
   bool removeFeed(size_t index);
   void clearAll();
 
-  // Bulk-adds feeds from a JSON file (see sdcard/rss_feeds_import.json for the
-  // expected format). Returns the number of feeds imported.
+  // Counts how many feeds a JSON file (see sdcard/rss_feeds_import.json for the
+  // expected format) would add, without adding them - for a confirmation prompt
+  // before importFromFile() actually runs.
+  size_t previewImportCount(const char* path) const;
+
+  // Bulk-adds feeds from a JSON file. Returns the number of feeds imported.
   size_t importFromFile(const char* path);
 
   const std::vector<RssFeed>& getFeeds() const { return feeds; }
   size_t getCount() const { return feeds.size(); }
 
-  // Where synced articles for a given feed slot live on the SD card. Feed slots are
-  // index-addressed, so removeFeed() renumbers the folders of every following feed
-  // to keep this aligned - see RssFeedListActivity/RssFeedManageActivity.
+  // Where synced articles for a given feed live on the SD card, named after the
+  // feed itself (sanitized, disambiguated against same-named earlier feeds) -
+  // see RssFeedListActivity/RssFeedManageActivity.
   static std::string articleDirFor(size_t feedIndex);
 };
 
