@@ -1,0 +1,11 @@
+{
+  "feeds": [
+    {
+      "url": "https://www.heise.de/rss/heise-atom.xml",
+      "title": "heise online"
+    },
+    {
+      "url": "https://www.tagesschau.de/xml/rss2"
+    }
+  ]
+}

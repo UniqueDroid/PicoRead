@@ -13,12 +13,15 @@
 #include "MappedInputManager.h"
 #include "RssFeedStore.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
 std::string rssFeedDir(size_t feedIndex) { return "/.picoread/rss/" + std::to_string(feedIndex); }
+// Dropped onto the SD card root by the user on their PC; see sdcard/rss_feeds_import.json for the format.
+constexpr const char* kImportFilePath = "/rss_feeds_import.json";
 }  // namespace
 
 int RssFeedListActivity::itemCount() const { return fixedRowCount() + static_cast<int>(RSS_STORE.getCount()); }
@@ -155,6 +158,14 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   return true;
 }
 
+void RssFeedListActivity::startImportFlow() {
+  const size_t imported = RSS_STORE.importFromFile(kImportFilePath);
+  char buf[64];
+  snprintf(buf, sizeof(buf), tr(STR_RSS_IMPORT_RESULT_FORMAT), static_cast<int>(imported));
+  startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_IMPORT_FROM_SD), buf),
+                         [this](const ActivityResult&) { requestUpdate(); });
+}
+
 void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
   activityManager.goToFileBrowser(rssFeedDir(feedIndex));
 }
@@ -174,6 +185,8 @@ void RssFeedListActivity::loop() {
       startAddFeedFlow();
     } else if (selectorIndex == 1) {
       startSyncFlow();
+    } else if (selectorIndex == 2) {
+      startImportFlow();
     } else {
       onSelectFeed(selectorIndex - fixedRowCount());
     }
@@ -214,6 +227,7 @@ void RssFeedListActivity::render(RenderLock&&) {
       [&feeds](int index) -> std::string {
         if (index == 0) return I18N.get(StrId::STR_RSS_ADD_FEED);
         if (index == 1) return I18N.get(StrId::STR_RSS_SYNC_NOW);
+        if (index == 2) return I18N.get(StrId::STR_RSS_IMPORT_FROM_SD);
         return feeds[index - fixedRowCount()].title;
       },
       nullptr, [](int index) { return index < fixedRowCount() ? UIIcon::None : UIIcon::Library; });

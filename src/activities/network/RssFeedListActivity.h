@@ -18,7 +18,7 @@ class RssFeedListActivity final : public Activity {
   std::string busyMessage;
   bool shouldTearDownWifiOnExit = false;
 
-  static int fixedRowCount() { return 2; }  // "Add Feed" + "Sync Now"
+  static int fixedRowCount() { return 3; }  // "Add Feed" + "Sync Now" + "Import from SD"
   int itemCount() const;
 
   // Runs action() immediately if WiFi is already connected, otherwise launches
@@ -32,6 +32,9 @@ class RssFeedListActivity final : public Activity {
   void startSyncFlow();
   void syncAllFeeds();
   bool syncOneFeed(size_t feedIndex);
+
+  // Bulk-adds feeds from a JSON file dropped onto the SD card, no WiFi needed.
+  void startImportFlow();
 
   void onSelectFeed(size_t feedIndex);
 

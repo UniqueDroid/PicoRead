@@ -46,3 +46,28 @@ bool RssFeedStore::removeFeed(size_t index) {
   feeds.erase(feeds.begin() + static_cast<ptrdiff_t>(index));
   return saveToFile();
 }
+
+size_t RssFeedStore::importFromFile(const char* path) {
+  JsonDocument doc;
+  if (!readDocFromFile(path, doc)) {
+    LOG_DBG("RSS", "Import file not found or invalid: %s", path);
+    return 0;
+  }
+
+  size_t imported = 0;
+  JsonArrayConst arr = doc["feeds"].as<JsonArrayConst>();
+  for (JsonObjectConst obj : arr) {
+    const char* url = obj["url"] | "";
+    if (!url || url[0] == '\0') continue;
+
+    RssFeed feed;
+    feed.url = url;
+    const char* title = obj["title"] | "";
+    feed.title = (title && title[0] != '\0') ? title : url;
+
+    if (addFeed(feed)) imported++;
+  }
+
+  LOG_DBG("RSS", "Imported %zu feeds from %s", imported, path);
+  return imported;
+}
