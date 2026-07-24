@@ -92,6 +92,7 @@ void XMLCALL endElement(void* userData, const XML_Char* name) {
   auto* p = static_cast<RssParser*>(userData);
 
   if (p->state == State::ChannelTitle && strcmp(name, "title") == 0) {
+    p->feedData.title = stripHtml(p->feedData.title);
     p->state = State::Channel;
     return;
   }
@@ -110,6 +111,7 @@ void XMLCALL endElement(void* userData, const XML_Char* name) {
   }
   if (p->state == State::Item && (strcmp(name, "item") == 0 || strcmp(name, "entry") == 0)) {
     if (!p->current.title.empty() && p->articleCount < MAX_ARTICLES) {
+      p->current.title = stripHtml(p->current.title);
       p->current.description = stripHtml(p->current.description);
       p->articleCount++;
       // With a handler set, the article is written out (e.g. to SD) and discarded

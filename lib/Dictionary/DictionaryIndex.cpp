@@ -27,6 +27,49 @@ int compareFolded(const char* recordWord, size_t recordWordLen, const std::strin
   if (recordWordLen == needle.size()) return 0;
   return recordWordLen < needle.size() ? -1 : 1;
 }
+
+// A handful of invisible/zero-width Unicode characters some sites embed in
+// feed content - seen in the wild on an RSS feed as ~2000 zero-width
+// space/joiner characters per article, apparently some kind of anti-scraping
+// or watermarking trick. None of these render as anything on an e-ink
+// display; strip them so they don't dilute the length caps in RssParser or
+// clutter dictionary entries with invisible noise.
+std::string stripInvisibleUnicode(const std::string& in) {
+  std::string out;
+  out.reserve(in.size());
+  size_t i = 0;
+  while (i < in.size()) {
+    const auto b0 = static_cast<unsigned char>(in[i]);
+    if (b0 == 0xE2 && i + 2 < in.size()) {
+      const auto b1 = static_cast<unsigned char>(in[i + 1]);
+      const auto b2 = static_cast<unsigned char>(in[i + 2]);
+      // U+200B-U+200F (zero-width space/joiners/LRM/RLM): E2 80 8B-8F
+      // U+2060 (word joiner): E2 81 A0
+      if ((b1 == 0x80 && b2 >= 0x8B && b2 <= 0x8F) || (b1 == 0x81 && b2 == 0xA0)) {
+        i += 3;
+        continue;
+      }
+    } else if (b0 == 0xEF && i + 2 < in.size()) {
+      const auto b1 = static_cast<unsigned char>(in[i + 1]);
+      const auto b2 = static_cast<unsigned char>(in[i + 2]);
+      // U+FEFF (BOM / zero-width no-break space): EF BB BF
+      // U+FE00-U+FE0F (variation selectors): EF B8 80-8F
+      if ((b1 == 0xBB && b2 == 0xBF) || (b1 == 0xB8 && b2 >= 0x80 && b2 <= 0x8F)) {
+        i += 3;
+        continue;
+      }
+    } else if (b0 == 0xC2 && i + 1 < in.size()) {
+      // U+00AD (soft hyphen): C2 AD
+      if (static_cast<unsigned char>(in[i + 1]) == 0xAD) {
+        i += 2;
+        continue;
+      }
+    }
+    out += in[i];
+    i++;
+  }
+  return out;
+}
 }  // namespace
 
 bool DictionaryIndex::open(const std::string& dirPath) {
@@ -73,7 +116,8 @@ void DictionaryIndex::close() {
   meta = DictionaryMeta{};
 }
 
-std::string stripHtml(const std::string& html) {
+std::string stripHtml(const std::string& htmlIn) {
+  const std::string html = stripInvisibleUnicode(htmlIn);
   std::string out;
   out.reserve(html.size());
 
