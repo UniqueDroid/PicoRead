@@ -86,21 +86,23 @@ void RssFeedListActivity::onUrlEntered(const std::string& url) {
 }
 
 void RssFeedListActivity::fetchAndAddFeed(const std::string& url) {
-  std::string xml;
-  if (!HttpDownloader::fetchUrl(url, xml)) {
+  // Streamed via the DataCallback overload rather than buffered into one
+  // std::string: some feeds embed full post HTML and can run past a
+  // megabyte, which fails outright on this device's heap (see RssParser.h).
+  RssParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      url, [&parser](const uint8_t* data, size_t len) { return parser.feed(data, len); });
+  if (!fetchOk) {
     LOG_ERR("RSS", "Failed to fetch feed: %s", url.c_str());
     return;
   }
-
-  RssFeedData feedData;
-  if (!RssParser::parse(xml, feedData) || feedData.title.empty()) {
+  if (!parser.finish() || parser.feedData.title.empty()) {
     LOG_ERR("RSS", "Failed to parse feed or no title: %s", url.c_str());
-    if (feedData.title.empty()) feedData.title = url;  // still usable, just unlabeled
   }
 
   RssFeed feed;
   feed.url = url;
-  feed.title = feedData.title.empty() ? url : feedData.title;
+  feed.title = parser.feedData.title.empty() ? url : parser.feedData.title;
   RSS_STORE.addFeed(feed);
 }
 
@@ -127,14 +129,14 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   const auto& feeds = RSS_STORE.getFeeds();
   if (feedIndex >= feeds.size()) return false;
 
-  std::string xml;
-  if (!HttpDownloader::fetchUrl(feeds[feedIndex].url, xml)) {
+  RssParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      feeds[feedIndex].url, [&parser](const uint8_t* data, size_t len) { return parser.feed(data, len); });
+  if (!fetchOk) {
     LOG_ERR("RSS", "Sync fetch failed: %s", feeds[feedIndex].url.c_str());
     return false;
   }
-
-  RssFeedData feedData;
-  if (!RssParser::parse(xml, feedData)) {
+  if (!parser.finish()) {
     LOG_ERR("RSS", "Sync parse failed: %s", feeds[feedIndex].url.c_str());
     return false;
   }
@@ -142,8 +144,8 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   const std::string dir = rssFeedDir(feedIndex);
   Storage.mkdir(dir.c_str(), true);
 
-  for (size_t a = 0; a < feedData.articles.size(); a++) {
-    const auto& article = feedData.articles[a];
+  for (size_t a = 0; a < parser.feedData.articles.size(); a++) {
+    const auto& article = parser.feedData.articles[a];
     const std::string path = dir + "/" + std::to_string(a) + ".txt";
     HalFile file;
     if (!Storage.openFileForWrite("RSS", path, file)) continue;
@@ -167,7 +169,17 @@ void RssFeedListActivity::startImportFlow() {
 }
 
 void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
-  activityManager.goToFileBrowser(rssFeedDir(feedIndex));
+  const std::string dir = rssFeedDir(feedIndex);
+  // Not synced yet (e.g. just imported from SD): the directory doesn't exist,
+  // and FileBrowserActivity would silently fall back to the SD root, which
+  // reads as "nothing happened" rather than "sync first".
+  if (!Storage.exists(dir.c_str())) {
+    startActivityForResult(
+        std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RSS_FEEDS), tr(STR_RSS_NOT_SYNCED_YET)),
+        [this](const ActivityResult&) { requestUpdate(); });
+    return;
+  }
+  activityManager.goToFileBrowser(dir);
 }
 
 void RssFeedListActivity::loop() {
