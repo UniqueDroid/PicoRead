@@ -18,6 +18,7 @@
 #include "home/RecentBooksActivity.h"
 #include "network/PicoReadWebServerActivity.h"
 #include "network/RssFeedListActivity.h"
+#include "network/WikipediaActivity.h"
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
@@ -205,6 +206,10 @@ void ActivityManager::goToRssFeeds() {
   replaceActivity(std::make_unique<RssFeedListActivity>(renderer, mappedInput));
 }
 
+void ActivityManager::goToWikipedia() {
+  replaceActivity(std::make_unique<WikipediaActivity>(renderer, mappedInput));
+}
+
 void ActivityManager::goToBrowser() {
   const auto& servers = OPDS_STORE.getServers();
   // Skip the server picker when there's only one server configured
@@ -245,6 +250,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::FLAPPY;
     } else if (activityName == "RssFeedList") {
       initialMenuItem = HomeMenuItem::RSS_FEEDS;
+    } else if (activityName == "Wikipedia") {
+      initialMenuItem = HomeMenuItem::WIKIPEDIA;
     } else if (activityName == "OpdsBookBrowser") {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
     } else if (activityName == "PicoReadWebServer") {

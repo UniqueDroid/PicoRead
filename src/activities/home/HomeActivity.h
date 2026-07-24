@@ -45,6 +45,8 @@ class HomeActivity final : public Activity {
     ++i;
     if (item == HomeMenuItem::RSS_FEEDS) return i;
     ++i;
+    if (item == HomeMenuItem::WIKIPEDIA) return i;
+    ++i;
     if (item == HomeMenuItem::OPDS_BROWSER) return hasOpdsUrl ? i : 0;
     if (hasOpdsUrl) ++i;
     if (item == HomeMenuItem::FILE_TRANSFER) return i;
@@ -62,6 +64,7 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::FLAPPY;
     if (idx == i++) return HomeMenuItem::STATS;
     if (idx == i++) return HomeMenuItem::RSS_FEEDS;
+    if (idx == i++) return HomeMenuItem::WIKIPEDIA;
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
@@ -74,6 +77,7 @@ class HomeActivity final : public Activity {
   void onReadingStatsOpen();
   void onFlappyGameOpen();
   void onRssFeedsOpen();
+  void onWikipediaOpen();
   void onSettingsOpen();
   void onFileTransferOpen();
   void onOpdsBrowserOpen();
