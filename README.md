@@ -60,10 +60,10 @@ Building it yourself instead of downloading a release? Jump to [Development](#de
 
 ## RSS Reader
 
-The RSS tile on the home screen manages a small offline feed reader:
+The RSS tile on the home screen manages a small offline feed reader. Subscribed feeds list at the top (or a "no feeds yet" placeholder), with the actions below a divider:
 
 - **Add Feed** — enter a feed URL (RSS 2.0 or Atom) on-device via the on-screen keyboard. Connects to Wi-Fi automatically if you're not already connected.
-- **Sync Now** — re-fetches every subscribed feed and saves its articles to the SD card as plain `.txt` files (title, link, then the article text with HTML stripped). No EPUB generation involved — it reuses the existing file browser and `.txt` reader, so there's no new reading UI or extra RAM cost.
+- **Sync Now** — re-fetches every subscribed feed and saves its articles to the SD card as plain `.txt` files (title, link, then the article text with HTML stripped — and any invisible zero-width Unicode padding some feeds embed stripped too), written one at a time as they're parsed rather than collected in RAM first. No EPUB generation involved — it reuses the existing `.txt` reader, so there's no new reading UI or extra RAM cost.
 - **Import from SD Card** — bulk-add feeds from a JSON file at `/rss_feeds_import.json` on the SD card root, no Wi-Fi needed for this step. Handy for setting up a batch of feeds from a computer instead of typing each URL on-device. A sample file is at [`sdcard/rss_feeds_import.json`](./sdcard/rss_feeds_import.json):
 
   ```json
@@ -82,7 +82,9 @@ The RSS tile on the home screen manages a small offline feed reader:
 
   `url` is required; `title` is optional — if omitted, the feed URL is used as the display name until the next sync, which fills in the real title from the feed itself.
 
-Once synced, tap a feed in the list to browse its articles like any other folder — each article is just a `.txt` file, openable offline like any book on the card. Synced content lives under `.picoread/rss/<feedIndex>/` and follows the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
+- **Manage Feeds** — lists every feed for one-tap removal, plus a "Delete All Feeds" row to clear everything at once.
+
+Tapping a synced feed opens its first article directly — no folder listing in between. Paging past the first/last page of an article jumps straight into the previous/next one, and the status bar shows your position in the feed ("3 / 12"). Back returns to the RSS overview instead of Home. Synced articles live under `.picoread/rss/<feed-name>/` (folder named after the feed, sanitized for the SD card's filesystem) and follow the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
 
 ---
 
