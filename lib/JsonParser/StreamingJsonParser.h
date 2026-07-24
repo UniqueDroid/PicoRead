@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 struct JsonCallbacks {
   void* ctx;
@@ -18,10 +19,16 @@ struct JsonCallbacks {
 
 class StreamingJsonParser {
  public:
-  static constexpr size_t TOKEN_BUF_SIZE = 512;
+  static constexpr size_t DEFAULT_TOKEN_BUF_SIZE = 512;
   static constexpr size_t MAX_NESTING = 32;
 
-  explicit StreamingJsonParser(const JsonCallbacks& callbacks);
+  // tokenBufSize bounds the longest key/string/number token this parser can hold;
+  // longer tokens are dropped (see emitToken()/tokenOverflow), not truncated. The
+  // default (512) covers ReleaseJsonParser's short fields (tag names, URLs); a
+  // caller expecting long string values (e.g. free-text article extracts) should
+  // pass a larger size. Heap-allocated regardless of size, so a larger buffer
+  // doesn't eat into the caller's stack.
+  explicit StreamingJsonParser(const JsonCallbacks& callbacks, size_t tokenBufSize = DEFAULT_TOKEN_BUF_SIZE);
 
   void reset();
   void feed(const char* data, size_t len);
@@ -56,7 +63,8 @@ class StreamingJsonParser {
   bool inArray() const { return nestingDepth > 0 && nestingStack[nestingDepth - 1] == Container::ARRAY; }
 
   JsonCallbacks cb;
-  char tokenBuf[TOKEN_BUF_SIZE];
+  std::unique_ptr<char[]> tokenBuf;
+  size_t tokenBufSize;
   size_t tokenLen;
   State state;
   bool expectingValue;

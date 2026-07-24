@@ -1,8 +1,17 @@
 #include "StreamingJsonParser.h"
 
+#include <Logging.h>
+#include <Memory.h>
+
 #include <cstring>
 
-StreamingJsonParser::StreamingJsonParser(const JsonCallbacks& callbacks) : cb(callbacks) { reset(); }
+StreamingJsonParser::StreamingJsonParser(const JsonCallbacks& callbacks, size_t tokenBufSize)
+    : cb(callbacks), tokenBuf(makeUniqueNoThrow<char[]>(tokenBufSize)), tokenBufSize(tokenBufSize) {
+  if (!tokenBuf) {
+    LOG_ERR("JSON", "OOM: %u byte token buffer", static_cast<unsigned>(tokenBufSize));
+  }
+  reset();
+}
 
 void StreamingJsonParser::reset() {
   tokenLen = 0;
@@ -10,7 +19,7 @@ void StreamingJsonParser::reset() {
   expectingValue = false;
   escaped = false;
   tokenOverflow = false;
-  error = false;
+  error = !tokenBuf;  // stays broken if the buffer failed to allocate; feed() then no-ops
   nestingDepth = 0;
   literalLen = 0;
   literalPos = 0;
@@ -181,7 +190,7 @@ void StreamingJsonParser::handleNumber(char c) {
 
   if (!tokenOverflow && cb.onNumber) {
     tokenBuf[tokenLen] = '\0';
-    cb.onNumber(cb.ctx, tokenBuf, tokenLen);
+    cb.onNumber(cb.ctx, tokenBuf.get(), tokenLen);
   }
   state = State::SCANNING;
   expectingValue = false;
@@ -224,7 +233,7 @@ void StreamingJsonParser::handleSkipString(char c) {
 }
 
 void StreamingJsonParser::appendToken(char c) {
-  if (tokenLen < TOKEN_BUF_SIZE - 1) {
+  if (tokenLen < tokenBufSize - 1) {
     tokenBuf[tokenLen++] = c;
   } else {
     tokenOverflow = true;
@@ -235,13 +244,13 @@ void StreamingJsonParser::emitToken() {
   if (state == State::IN_STRING_KEY) {
     if (!tokenOverflow && cb.onKey) {
       tokenBuf[tokenLen] = '\0';
-      cb.onKey(cb.ctx, tokenBuf, tokenLen);
+      cb.onKey(cb.ctx, tokenBuf.get(), tokenLen);
     }
     state = State::SCANNING;
   } else {
     if (!tokenOverflow && cb.onString) {
       tokenBuf[tokenLen] = '\0';
-      cb.onString(cb.ctx, tokenBuf, tokenLen);
+      cb.onString(cb.ctx, tokenBuf.get(), tokenLen);
     }
     state = State::SCANNING;
     expectingValue = false;

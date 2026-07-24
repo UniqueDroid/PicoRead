@@ -1,6 +1,5 @@
 #include "WikipediaActivity.h"
 
-#include <ArduinoJson.h>
 #include <GfxRenderer.h>
 #include <HalClock.h>
 #include <HalStorage.h>
@@ -16,6 +15,7 @@
 
 #include "network/HttpDownloader.h"
 #include "MappedInputManager.h"
+#include "WikipediaJsonParser.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/BmpViewerActivity.h"
 #include "components/UITheme.h"
@@ -122,32 +122,32 @@ void WikipediaActivity::fetchArticleOfDay() {
   char urlBuf[160];
   snprintf(urlBuf, sizeof(urlBuf), "%s/feed/featured/%04u/%02u/%02u", wikipediaApiBase().c_str(), year, month, day);
 
-  std::string json;
-  if (!HttpDownloader::fetchUrl(urlBuf, json)) {
+  // Streamed straight into the parser: /feed/featured bundles tfa (what we want)
+  // alongside mostread/news/onthisday, which can run to tens of KB combined -
+  // buffering the whole response first risks the same OOM RssParser hit (see
+  // WikipediaJsonParser.h).
+  WikipediaFeaturedParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      urlBuf, [&parser](const uint8_t* data, size_t len) {
+        parser.feed(reinterpret_cast<const char*>(data), len);
+        return true;
+      });
+  if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
     state = State::List;
     requestUpdate();
     return;
   }
 
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) {
-    LOG_ERR("WIKI", "JSON parse failed for featured article");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  const char* title = doc["tfa"]["title"] | "";
-  const char* extract = doc["tfa"]["extract"] | "";
-  if (title[0] == '\0') {
+  if (parser.getArticleTitle().empty()) {
+    LOG_ERR("WIKI", "No tfa.title in featured response");
     state = State::List;
     requestUpdate();
     return;
   }
 
   Storage.mkdir(kWikiDir, true);
-  const std::string content = std::string(title) + "\n\n" + extract;
+  const std::string content = parser.getArticleTitle() + "\n\n" + parser.getArticleExtract();
   if (!writeTextFile(kArticlePath, content)) {
     state = State::List;
     requestUpdate();
@@ -174,26 +174,25 @@ void WikipediaActivity::fetchPictureOfDay() {
   char urlBuf[160];
   snprintf(urlBuf, sizeof(urlBuf), "%s/feed/featured/%04u/%02u/%02u", wikipediaApiBase().c_str(), year, month, day);
 
-  std::string json;
-  if (!HttpDownloader::fetchUrl(urlBuf, json)) {
+  WikipediaFeaturedParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      urlBuf, [&parser](const uint8_t* data, size_t len) {
+        parser.feed(reinterpret_cast<const char*>(data), len);
+        return true;
+      });
+  if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
     state = State::List;
     requestUpdate();
     return;
   }
 
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) {
-    LOG_ERR("WIKI", "JSON parse failed for picture of the day");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  // Prefer the thumbnail over the (potentially huge) original - the display is
-  // ~800x480, no need to pull a multi-megapixel source image over the air.
-  const char* imageUrl = doc["image"]["thumbnail"]["source"] | doc["image"]["image"]["source"] | "";
-  if (imageUrl[0] == '\0') {
+  // getImageUrl() already prefers the thumbnail over the (potentially huge)
+  // original - the display is ~800x480, no need to pull a multi-megapixel source
+  // image over the air.
+  const std::string imageUrl = parser.getImageUrl();
+  if (imageUrl.empty()) {
+    LOG_ERR("WIKI", "No image URL in featured response");
     state = State::List;
     requestUpdate();
     return;
@@ -201,7 +200,7 @@ void WikipediaActivity::fetchPictureOfDay() {
 
   Storage.mkdir(kWikiDir, true);
   if (HttpDownloader::downloadToFile(imageUrl, kImageJpgPath) != HttpDownloader::OK) {
-    LOG_ERR("WIKI", "Image download failed: %s", imageUrl);
+    LOG_ERR("WIKI", "Image download failed: %s", imageUrl.c_str());
     state = State::List;
     requestUpdate();
     return;
@@ -244,17 +243,21 @@ void WikipediaActivity::fetchOnThisDay() {
   char urlBuf[160];
   snprintf(urlBuf, sizeof(urlBuf), "%s/feed/onthisday/selected/%02u/%02u", wikipediaApiBase().c_str(), month, day);
 
-  std::string json;
-  if (!HttpDownloader::fetchUrl(urlBuf, json)) {
+  WikipediaOnThisDayParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      urlBuf, [&parser](const uint8_t* data, size_t len) {
+        parser.feed(reinterpret_cast<const char*>(data), len);
+        return true;
+      });
+  if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
     state = State::List;
     requestUpdate();
     return;
   }
 
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) {
-    LOG_ERR("WIKI", "JSON parse failed for on-this-day");
+  if (parser.getEventCount() == 0) {
+    LOG_ERR("WIKI", "No events in on-this-day response");
     state = State::List;
     requestUpdate();
     return;
@@ -263,22 +266,7 @@ void WikipediaActivity::fetchOnThisDay() {
   char headerBuf[48];
   snprintf(headerBuf, sizeof(headerBuf), tr(STR_WIKI_ON_THIS_DAY_FORMAT), static_cast<int>(month),
           static_cast<int>(day));
-  std::string content = headerBuf;
-  content += "\n\n";
-
-  JsonArrayConst events = doc["selected"].as<JsonArrayConst>();
-  for (JsonObjectConst event : events) {
-    const int eventYear = event["year"] | 0;
-    const char* text = event["text"] | "";
-    if (text[0] == '\0') continue;
-    content += std::to_string(eventYear) + ": " + text + "\n\n";
-  }
-
-  if (events.size() == 0) {
-    state = State::List;
-    requestUpdate();
-    return;
-  }
+  const std::string content = std::string(headerBuf) + "\n\n" + parser.getDigest();
 
   Storage.mkdir(kWikiDir, true);
   if (!writeTextFile(kOnThisDayPath, content)) {
@@ -297,32 +285,28 @@ void WikipediaActivity::fetchRandomArticle() {
 
   const std::string url = wikipediaApiBase() + "/page/random/summary";
 
-  std::string json;
-  if (!HttpDownloader::fetchUrl(url, json)) {
+  WikipediaSummaryParser parser;
+  const bool fetchOk = HttpDownloader::fetchUrl(
+      url, [&parser](const uint8_t* data, size_t len) {
+        parser.feed(reinterpret_cast<const char*>(data), len);
+        return true;
+      });
+  if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", url.c_str());
     state = State::List;
     requestUpdate();
     return;
   }
 
-  JsonDocument doc;
-  if (deserializeJson(doc, json)) {
-    LOG_ERR("WIKI", "JSON parse failed for random article");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  const char* title = doc["title"] | "";
-  const char* extract = doc["extract"] | "";
-  if (title[0] == '\0') {
+  if (parser.getTitle().empty()) {
+    LOG_ERR("WIKI", "No title in random-article response");
     state = State::List;
     requestUpdate();
     return;
   }
 
   Storage.mkdir(kWikiDir, true);
-  const std::string content = std::string(title) + "\n\n" + extract;
+  const std::string content = parser.getTitle() + "\n\n" + parser.getExtract();
   if (!writeTextFile(kRandomPath, content)) {
     state = State::List;
     requestUpdate();

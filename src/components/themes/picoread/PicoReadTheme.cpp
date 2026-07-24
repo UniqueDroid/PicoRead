@@ -5,6 +5,8 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
+
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "components/icons/book.h"
@@ -65,9 +67,47 @@ void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonC
   const int tileWidth = (usableWidth - kGap * (kColumns - 1)) / kColumns;
   const int tileHeight = kTileHeight;
 
-  for (int i = 0; i < buttonCount; ++i) {
-    const int col = i % kColumns;
-    const int row = i / kColumns;
+  // rect.height as passed by HomeActivity doesn't account for homeCoverTileHeight
+  // (see the same fix applied to BaseTheme/LyraTheme/RoundedRaffTheme's
+  // drawButtonMenu/drawList - this bug isn't specific to one theme's math, it's in
+  // what the caller passes), so derive real available space independently rather
+  // than trust it here too.
+  const int availableHeight = renderer.getScreenHeight() - rect.y - PicoReadMetrics::values.buttonHintsHeight;
+  const int rowHeight = tileHeight + kGap;
+  int rowsPerPage = availableHeight / rowHeight;
+  if (rowsPerPage < 1) rowsPerPage = 1;
+  const int itemsPerPage = rowsPerPage * kColumns;
+
+  const int totalPages = (buttonCount + itemsPerPage - 1) / itemsPerPage;
+  const int currentPage = std::max(0, selectedIndex) / itemsPerPage;
+  const int pageStart = currentPage * itemsPerPage;
+  const int pageEnd = std::min(buttonCount, pageStart + itemsPerPage);
+
+  if (totalPages > 1) {
+    constexpr int indicatorWidth = 20;
+    constexpr int arrowSize = 6;
+    constexpr int margin = 15;
+    const int centerX = rect.x + rect.width - indicatorWidth / 2 - margin;
+    const int indicatorTop = rect.y;
+    const int indicatorBottom = rect.y + availableHeight - arrowSize;
+
+    for (int i = 0; i < arrowSize; ++i) {
+      const int lineWidth = 1 + i * 2;
+      const int startX = centerX - i;
+      renderer.drawLine(startX, indicatorTop + i, startX + lineWidth - 1, indicatorTop + i);
+    }
+    for (int i = 0; i < arrowSize; ++i) {
+      const int lineWidth = 1 + (arrowSize - 1 - i) * 2;
+      const int startX = centerX - (arrowSize - 1 - i);
+      renderer.drawLine(startX, indicatorBottom - arrowSize + 1 + i, startX + lineWidth - 1,
+                        indicatorBottom - arrowSize + 1 + i);
+    }
+  }
+
+  for (int i = pageStart; i < pageEnd; ++i) {
+    const int posInPage = i - pageStart;
+    const int col = posInPage % kColumns;
+    const int row = posInPage / kColumns;
     const int tileX = rect.x + kSidePadding + col * (tileWidth + kGap);
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
