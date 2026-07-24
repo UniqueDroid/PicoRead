@@ -200,7 +200,10 @@ void RoundedRaffTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int butt
   const int rowHeight = renderer.getLineHeight(kTitleFontId) + 20;  // 10px top + 10px bottom
   const int rowGap = kSelectableRowGap;
   const int rowStep = rowHeight + rowGap;
-  const int pageItems = std::max(1, rect.height / rowStep);
+  // rect.height (as passed by HomeActivity) doesn't reflect the real remaining
+  // space below rect.y - see BaseTheme::drawButtonMenu for why.
+  const int availableHeight = renderer.getScreenHeight() - rect.y - RoundedRaffMetrics::values.buttonHintsHeight;
+  const int pageItems = std::max(1, availableHeight / rowStep);
   const int safeSelectedIndex = std::max(0, selectedIndex);
   const int pageStartIndex = (safeSelectedIndex / pageItems) * pageItems;
   const int menuTop = rect.y;

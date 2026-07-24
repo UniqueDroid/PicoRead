@@ -1,6 +1,7 @@
 #include "PicoReadTheme.h"
 
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
 
@@ -190,4 +191,38 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
   }
 
   (void)bufferRestored;
+}
+
+// Same layout as BaseTheme::drawButtonHints, but with rounded top corners (bottom
+// corners stay square since they sit flush against the screen edge).
+void PicoReadTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
+                                    const char* btn4) const {
+  const GfxRenderer::Orientation origOrientation = renderer.getOrientation();
+  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+
+  const int pageHeight = renderer.getScreenHeight();
+  constexpr int buttonWidth = 106;
+  constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
+  constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;
+  constexpr int textYOffset = 7;
+  constexpr int hintCornerRadius = 8;
+  constexpr int x4ButtonPositions[] = {25, 130, 245, 350};
+  constexpr int x3ButtonPositions[] = {38, 154, 268, 384};
+  const int* buttonPositions = gpio.deviceIsX3() ? x3ButtonPositions : x4ButtonPositions;
+  const char* labels[] = {btn1, btn2, btn3, btn4};
+
+  for (int i = 0; i < 4; i++) {
+    if (labels[i] != nullptr && labels[i][0] != '\0') {
+      const int x = buttonPositions[i];
+      const int y = pageHeight - buttonY;
+      renderer.fillRoundedRect(x, y, buttonWidth, buttonHeight, hintCornerRadius, true, true, false, false,
+                               Color::White);
+      renderer.drawRoundedRect(x, y, buttonWidth, buttonHeight, 2, hintCornerRadius, true, true, false, false, true);
+      const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
+      const int textX = x + (buttonWidth - 1 - textWidth) / 2;
+      renderer.drawText(UI_10_FONT_ID, textX, y + textYOffset, labels[i]);
+    }
+  }
+
+  renderer.setOrientation(origOrientation);
 }

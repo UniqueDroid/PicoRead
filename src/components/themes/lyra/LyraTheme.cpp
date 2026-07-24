@@ -517,8 +517,11 @@ void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
                                const std::function<UIIcon(int index)>& rowIcon) const {
   // Paginate rather than draw every row unconditionally - with enough home-screen
   // tiles the full list no longer fits in one screen (see BaseTheme::drawButtonMenu).
+  // rect.height doesn't reflect the real remaining space below rect.y (same root
+  // cause as BaseTheme) - derive it from the screen height directly instead.
   const int rowStep = LyraMetrics::values.menuRowHeight + LyraMetrics::values.menuSpacing;
-  const int pageItems = std::max(1, rect.height / rowStep);
+  const int availableHeight = renderer.getScreenHeight() - rect.y - LyraMetrics::values.buttonHintsHeight;
+  const int pageItems = std::max(1, availableHeight / rowStep);
   const int safeSelectedIndex = std::max(0, selectedIndex);
   const int pageStartIndex = (safeSelectedIndex / pageItems) * pageItems;
 

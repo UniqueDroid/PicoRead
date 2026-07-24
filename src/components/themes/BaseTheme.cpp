@@ -668,8 +668,13 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
   // Paginate rather than draw every row unconditionally - with enough home-screen
   // tiles (Bookmarks/Flappy/Stats/...) the full list no longer fits in one screen
   // and would otherwise run behind the button hints at the bottom.
+  // NOTE: rect.height (as passed by HomeActivity) does not actually reflect the
+  // real remaining space below rect.y - it's computed independently of
+  // homeCoverTileHeight, which rect.y already accounts for. Deriving available
+  // space from the screen height directly instead of trusting rect.height.
   const int rowStep = BaseMetrics::values.menuRowHeight + BaseMetrics::values.menuSpacing;
-  const int pageItems = std::max(1, (rect.height - BaseMetrics::values.verticalSpacing) / rowStep);
+  const int availableHeight = renderer.getScreenHeight() - rect.y - BaseMetrics::values.buttonHintsHeight;
+  const int pageItems = std::max(1, (availableHeight - BaseMetrics::values.verticalSpacing) / rowStep);
   const int safeSelectedIndex = std::max(0, selectedIndex);
   const int pageStartIndex = (safeSelectedIndex / pageItems) * pageItems;
 
