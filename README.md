@@ -20,6 +20,7 @@ On top of that, this fork so far adds:
 - **PicoRead theme** — a new default theme with a 2-column tile home screen and a 3-cover "Continue Reading" strip up top, alongside the existing Classic/Lyra/RoundedRaff themes (pick any of them in Settings > Display).
 - **Reading Statistics** — a home-screen tile with per-book stats (sessions, reading time, pages turned, average session length, pages/minute) plus an "All Books" aggregate card.
 - **RSS Reader** — subscribe to feeds, sync them over Wi-Fi, and read articles fully offline afterwards. See [RSS Reader](#rss-reader) below.
+- **Wikipedia** — today's featured article, an on-this-day digest, and a random article, synced with one tap and read fully offline afterward. See [Wikipedia](#wikipedia) below.
 - **Restart / Shut Down** — both are now one tap away in Settings > System instead of requiring a button-combo or waiting out the sleep timer.
 - **Flappy** — a slow-tick, e-ink-appropriate take on Flappy Bird for killing 5 minutes between chapters. Home screen tile, one button to flap.
 
@@ -96,6 +97,18 @@ The RSS tile on the home screen manages a small offline feed reader. Subscribed 
 - **Manage Feeds** — lists every feed for one-tap removal, plus a "Delete All Feeds" row to clear everything at once.
 
 Tapping a synced feed opens its first article directly — no folder listing in between. Paging past the first/last page of an article jumps straight into the previous/next one, and the status bar shows your position in the feed ("3 / 12"). Back returns to the RSS overview instead of Home. Synced articles live under `.picoread/rss/<feed-name>/` (folder named after the feed, sanitized for the SD card's filesystem) and follow the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
+
+---
+
+## Wikipedia
+
+The Wikipedia tile on the home screen fetches three things from Wikipedia's own REST API, in the language you've set in Settings:
+
+- **Article of the Day** — the current featured article.
+- **On This Day** — a digest of historical events for today's date.
+- **Random Article** — exactly that.
+
+None of these fetch on their own when selected — tap **Sync Now** first to download all three and save them to the SD card, then read them fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home. Files live under `.picoread/wikipedia/` and are overwritten on each sync — no history is kept.
 
 ---
 

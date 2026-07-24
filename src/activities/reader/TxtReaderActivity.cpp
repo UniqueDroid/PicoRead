@@ -32,6 +32,9 @@ constexpr uint8_t CACHE_VERSION = 3;          // Increment when cache format cha
 constexpr const char* kRssArticlesPrefix = "/.picoread/rss/";
 bool isRssArticle(const std::string& path) { return path.rfind(kRssArticlesPrefix, 0) == 0; }
 
+constexpr const char* kWikipediaArticlesPrefix = "/.picoread/wikipedia/";
+bool isWikipediaArticle(const std::string& path) { return path.rfind(kWikipediaArticlesPrefix, 0) == 0; }
+
 // Synced articles are written as "title\n\nlink\n\ndescription" (see
 // RssFeedListActivity::syncOneFeed) - read just the first line for a human title
 // instead of the bare "0.txt" filename Recents/the 3-cover carousel would
@@ -122,24 +125,29 @@ void TxtReaderActivity::loop() {
   }
 
   const bool fromRss = txt && isRssArticle(txt->getPath());
+  const bool fromWikipedia = txt && isWikipediaArticle(txt->getPath());
 
-  // Long press BACK (1s+) goes to file selection - or, for a synced RSS article,
-  // back to the RSS overview (its folder is just numbered .txt files, not meant
-  // for manual browsing).
+  // Long press BACK (1s+) goes to file selection - or, for a synced RSS article
+  // or a Wikipedia fetch, back to that feature's own overview screen (their
+  // folders just hold a handful of fixed files, not meant for manual browsing).
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     if (fromRss) {
       activityManager.goToRssFeeds();
+    } else if (fromWikipedia) {
+      activityManager.goToWikipedia();
     } else {
       activityManager.goToFileBrowser(txt ? txt->getPath() : "");
     }
     return;
   }
 
-  // Short press BACK goes directly to home (or the RSS overview for an article)
+  // Short press BACK goes directly to home (or the feature's overview for an article)
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
     if (fromRss) {
       activityManager.goToRssFeeds();
+    } else if (fromWikipedia) {
+      activityManager.goToWikipedia();
     } else {
       onGoHome();
     }
@@ -158,8 +166,10 @@ void TxtReaderActivity::loop() {
     // Paging back past the first page: jump straight into the previous sibling
     // file in the folder, no intermediate screen. Built for folders of small
     // standalone files (e.g. synced RSS articles: 0.txt, 1.txt, ...) where a
-    // suggestion menu would just be friction.
-    const std::string prevPath = NextBookFinder::findPreviousBook(txt->getPath());
+    // suggestion menu would just be friction. Wikipedia's folder holds
+    // unrelated fixed files (article/onthisday/random), not a sequence, so
+    // skip sibling-jumping there.
+    const std::string prevPath = fromWikipedia ? std::string() : NextBookFinder::findPreviousBook(txt->getPath());
     if (!prevPath.empty()) {
       activityManager.goToReader(prevPath);
     }
@@ -167,6 +177,8 @@ void TxtReaderActivity::loop() {
     if (currentPage < totalPages - 1) {
       currentPage++;
       requestUpdate();
+    } else if (fromWikipedia) {
+      activityManager.goToWikipedia();
     } else {
       const auto nextNames = NextBookFinder::findNextBooks(txt->getPath(), 1);
       if (!nextNames.empty()) {

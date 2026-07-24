@@ -4,7 +4,6 @@
 #include <HalClock.h>
 #include <HalStorage.h>
 #include <I18n.h>
-#include <JpegToBmpConverter.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_sntp.h>
@@ -17,7 +16,7 @@
 #include "MappedInputManager.h"
 #include "WikipediaJsonParser.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "activities/util/BmpViewerActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -26,8 +25,6 @@ constexpr const char* kWikiDir = "/.picoread/wikipedia";
 constexpr const char* kArticlePath = "/.picoread/wikipedia/article.txt";
 constexpr const char* kOnThisDayPath = "/.picoread/wikipedia/onthisday.txt";
 constexpr const char* kRandomPath = "/.picoread/wikipedia/random.txt";
-constexpr const char* kImageJpgPath = "/.picoread/wikipedia/potd.jpg";
-constexpr const char* kImageBmpPath = "/.picoread/wikipedia/potd.bmp";
 
 // LANGUAGE_CODES matches Wikipedia's own subdomain codes for most entries, but a
 // couple of PicoRead's codes don't line up with Wikipedia's - "SI" here means
@@ -105,18 +102,12 @@ void WikipediaActivity::ensureWifiThen(const std::function<void()>& action) {
                          });
 }
 
-void WikipediaActivity::fetchArticleOfDay() {
-  state = State::Busy;
-  busyMessage = tr(STR_WIKI_LOADING);
-  requestUpdateAndWait();
-
+bool WikipediaActivity::downloadArticleOfDay() {
   uint16_t year;
   uint8_t month, day;
   if (!getTodayDate(year, month, day)) {
     LOG_ERR("WIKI", "Could not determine today's date");
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   char urlBuf[160];
@@ -134,110 +125,25 @@ void WikipediaActivity::fetchArticleOfDay() {
       });
   if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   if (parser.getArticleTitle().empty()) {
     LOG_ERR("WIKI", "No tfa.title in featured response");
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   Storage.mkdir(kWikiDir, true);
   const std::string content = parser.getArticleTitle() + "\n\n" + parser.getArticleExtract();
-  if (!writeTextFile(kArticlePath, content)) {
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  activityManager.goToReader(kArticlePath);
+  return writeTextFile(kArticlePath, content);
 }
 
-void WikipediaActivity::fetchPictureOfDay() {
-  state = State::Busy;
-  busyMessage = tr(STR_WIKI_LOADING);
-  requestUpdateAndWait();
-
+bool WikipediaActivity::downloadOnThisDay() {
   uint16_t year;
   uint8_t month, day;
   if (!getTodayDate(year, month, day)) {
     LOG_ERR("WIKI", "Could not determine today's date");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  char urlBuf[160];
-  snprintf(urlBuf, sizeof(urlBuf), "%s/feed/featured/%04u/%02u/%02u", wikipediaApiBase().c_str(), year, month, day);
-
-  WikipediaFeaturedParser parser;
-  const bool fetchOk = HttpDownloader::fetchUrl(
-      urlBuf, [&parser](const uint8_t* data, size_t len) {
-        parser.feed(reinterpret_cast<const char*>(data), len);
-        return true;
-      });
-  if (!fetchOk) {
-    LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  // getImageUrl() already prefers the thumbnail over the (potentially huge)
-  // original - the display is ~800x480, no need to pull a multi-megapixel source
-  // image over the air.
-  const std::string imageUrl = parser.getImageUrl();
-  if (imageUrl.empty()) {
-    LOG_ERR("WIKI", "No image URL in featured response");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  Storage.mkdir(kWikiDir, true);
-  if (HttpDownloader::downloadToFile(imageUrl, kImageJpgPath) != HttpDownloader::OK) {
-    LOG_ERR("WIKI", "Image download failed: %s", imageUrl.c_str());
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  HalFile jpegFile;
-  HalFile bmpFile;
-  if (!Storage.openFileForRead("WIKI", kImageJpgPath, jpegFile) ||
-      !Storage.openFileForWrite("WIKI", kImageBmpPath, bmpFile)) {
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-  const bool converted = JpegToBmpConverter::jpegFileToBmpStreamWithSize(
-      jpegFile, bmpFile, renderer.getScreenWidth(), renderer.getScreenHeight());
-  if (!converted) {
-    LOG_ERR("WIKI", "JPEG to BMP conversion failed");
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  activityManager.replaceActivity(std::make_unique<BmpViewerActivity>(renderer, mappedInput, kImageBmpPath));
-}
-
-void WikipediaActivity::fetchOnThisDay() {
-  state = State::Busy;
-  busyMessage = tr(STR_WIKI_LOADING);
-  requestUpdateAndWait();
-
-  uint16_t year;
-  uint8_t month, day;
-  if (!getTodayDate(year, month, day)) {
-    LOG_ERR("WIKI", "Could not determine today's date");
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   char urlBuf[160];
@@ -251,16 +157,12 @@ void WikipediaActivity::fetchOnThisDay() {
       });
   if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", urlBuf);
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   if (parser.getEventCount() == 0) {
     LOG_ERR("WIKI", "No events in on-this-day response");
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   char headerBuf[48];
@@ -269,20 +171,10 @@ void WikipediaActivity::fetchOnThisDay() {
   const std::string content = std::string(headerBuf) + "\n\n" + parser.getDigest();
 
   Storage.mkdir(kWikiDir, true);
-  if (!writeTextFile(kOnThisDayPath, content)) {
-    state = State::List;
-    requestUpdate();
-    return;
-  }
-
-  activityManager.goToReader(kOnThisDayPath);
+  return writeTextFile(kOnThisDayPath, content);
 }
 
-void WikipediaActivity::fetchRandomArticle() {
-  state = State::Busy;
-  busyMessage = tr(STR_WIKI_LOADING);
-  requestUpdateAndWait();
-
+bool WikipediaActivity::downloadRandomArticle() {
   const std::string url = wikipediaApiBase() + "/page/random/summary";
 
   WikipediaSummaryParser parser;
@@ -293,27 +185,66 @@ void WikipediaActivity::fetchRandomArticle() {
       });
   if (!fetchOk) {
     LOG_ERR("WIKI", "Fetch failed: %s", url.c_str());
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   if (parser.getTitle().empty()) {
     LOG_ERR("WIKI", "No title in random-article response");
-    state = State::List;
-    requestUpdate();
-    return;
+    return false;
   }
 
   Storage.mkdir(kWikiDir, true);
   const std::string content = parser.getTitle() + "\n\n" + parser.getExtract();
-  if (!writeTextFile(kRandomPath, content)) {
-    state = State::List;
-    requestUpdate();
+  return writeTextFile(kRandomPath, content);
+}
+
+// Downloads all items in one pass so a device can be synced once (e.g. before
+// leaving the house) and everything read offline afterward - selecting an
+// entry from the list never triggers a network fetch on its own, see
+// openTextOrPromptSync().
+void WikipediaActivity::syncAll() {
+  state = State::Busy;
+  constexpr int kTotal = 3;
+  int step = 0;
+
+  auto showProgress = [&] {
+    ++step;
+    char buf[32];
+    snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), step, kTotal);
+    busyMessage = buf;
+    requestUpdateAndWait();
+  };
+
+  showProgress();
+  downloadArticleOfDay();
+  showProgress();
+  downloadOnThisDay();
+  showProgress();
+  downloadRandomArticle();
+
+  state = State::List;
+  requestUpdate();
+}
+
+void WikipediaActivity::promptSync() {
+  startActivityForResult(
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_WIKIPEDIA), tr(STR_RSS_NOT_SYNCED_YET),
+                                             tr(STR_CANCEL), tr(STR_RSS_SYNC_NOW_SHORT)),
+      [this](const ActivityResult& result) {
+        if (!result.isCancelled) {
+          ensureWifiThen([this] { syncAll(); });
+        } else {
+          requestUpdate();
+        }
+      });
+}
+
+void WikipediaActivity::openTextOrPromptSync(const std::string& path) {
+  if (Storage.exists(path.c_str())) {
+    activityManager.goToReader(path);
     return;
   }
-
-  activityManager.goToReader(kRandomPath);
+  promptSync();
 }
 
 void WikipediaActivity::loop() {
@@ -329,16 +260,16 @@ void WikipediaActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     switch (selectorIndex) {
       case 0:
-        ensureWifiThen([this] { fetchArticleOfDay(); });
+        openTextOrPromptSync(kArticlePath);
         break;
       case 1:
-        ensureWifiThen([this] { fetchPictureOfDay(); });
+        openTextOrPromptSync(kOnThisDayPath);
         break;
       case 2:
-        ensureWifiThen([this] { fetchOnThisDay(); });
+        openTextOrPromptSync(kRandomPath);
         break;
       case 3:
-        ensureWifiThen([this] { fetchRandomArticle(); });
+        ensureWifiThen([this] { syncAll(); });
         break;
       default:
         break;
@@ -381,11 +312,11 @@ void WikipediaActivity::render(RenderLock&&) {
           case 0:
             return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
           case 1:
-            return I18N.get(StrId::STR_WIKI_PICTURE_OF_DAY);
-          case 2:
             return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
-          default:
+          case 2:
             return I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE);
+          default:
+            return I18N.get(StrId::STR_RSS_SYNC_NOW);
         }
       },
       nullptr, [](int) { return UIIcon::None; });
