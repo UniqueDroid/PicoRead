@@ -74,40 +74,26 @@ void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonC
   // than trust it here too.
   const int availableHeight = renderer.getScreenHeight() - rect.y - PicoReadMetrics::values.buttonHintsHeight;
   const int rowHeight = tileHeight + kGap;
-  int rowsPerPage = availableHeight / rowHeight;
-  if (rowsPerPage < 1) rowsPerPage = 1;
-  const int itemsPerPage = rowsPerPage * kColumns;
+  int visibleRows = availableHeight / rowHeight;
+  if (visibleRows < 1) visibleRows = 1;
 
-  const int totalPages = (buttonCount + itemsPerPage - 1) / itemsPerPage;
-  const int currentPage = std::max(0, selectedIndex) / itemsPerPage;
-  const int pageStart = currentPage * itemsPerPage;
-  const int pageEnd = std::min(buttonCount, pageStart + itemsPerPage);
+  const int totalRows = (buttonCount + kColumns - 1) / kColumns;
+  const int selectedRow = std::max(0, selectedIndex) / kColumns;
 
-  if (totalPages > 1) {
-    constexpr int indicatorWidth = 20;
-    constexpr int arrowSize = 6;
-    constexpr int margin = 15;
-    const int centerX = rect.x + rect.width - indicatorWidth / 2 - margin;
-    const int indicatorTop = rect.y;
-    const int indicatorBottom = rect.y + availableHeight - arrowSize;
+  // Sliding window, not fixed pages: shows rows [0, visibleRows) until the
+  // selection moves past the visible bottom edge, then the window follows by the
+  // minimum needed - one row at a time, same continuous feel as the other themes'
+  // list scrolling, no page jump and no separate arrow indicator needed.
+  int windowStartRow = std::max(0, selectedRow - visibleRows + 1);
+  windowStartRow = std::min(windowStartRow, std::max(0, totalRows - visibleRows));
 
-    for (int i = 0; i < arrowSize; ++i) {
-      const int lineWidth = 1 + i * 2;
-      const int startX = centerX - i;
-      renderer.drawLine(startX, indicatorTop + i, startX + lineWidth - 1, indicatorTop + i);
-    }
-    for (int i = 0; i < arrowSize; ++i) {
-      const int lineWidth = 1 + (arrowSize - 1 - i) * 2;
-      const int startX = centerX - (arrowSize - 1 - i);
-      renderer.drawLine(startX, indicatorBottom - arrowSize + 1 + i, startX + lineWidth - 1,
-                        indicatorBottom - arrowSize + 1 + i);
-    }
-  }
+  const int itemStart = windowStartRow * kColumns;
+  const int itemEnd = std::min(buttonCount, itemStart + visibleRows * kColumns);
 
-  for (int i = pageStart; i < pageEnd; ++i) {
-    const int posInPage = i - pageStart;
-    const int col = posInPage % kColumns;
-    const int row = posInPage / kColumns;
+  for (int i = itemStart; i < itemEnd; ++i) {
+    const int posInWindow = i - itemStart;
+    const int col = posInWindow % kColumns;
+    const int row = posInWindow / kColumns;
     const int tileX = rect.x + kSidePadding + col * (tileWidth + kGap);
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
