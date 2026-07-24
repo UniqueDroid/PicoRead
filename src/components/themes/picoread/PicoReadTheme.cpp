@@ -31,6 +31,8 @@ constexpr int kCoverCornerRadius = 6;
 constexpr int kCornerRadius = 12;
 constexpr int kIconSize = 32;
 constexpr int kTileHeight = 92;
+constexpr int kRowsPerPage = 4;
+constexpr int kItemsPerPage = kColumns * kRowsPerPage;
 
 const uint8_t* iconForName(UIIcon icon) {
   switch (icon) {
@@ -67,9 +69,16 @@ void PicoReadTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonC
   const int tileWidth = (usableWidth - kGap * (kColumns - 1)) / kColumns;
   const int tileHeight = kTileHeight;
 
-  for (int i = 0; i < buttonCount; ++i) {
-    const int col = i % kColumns;
-    const int row = i / kColumns;
+  // Fixed 8-tiles-per-page: pages are simply consecutive chunks of buttonCount,
+  // so a trailing page with e.g. a single leftover tile just shows that one
+  // tile at the top-left instead of a full grid - no arrow/indicator needed.
+  const int pageStart = (std::max(0, selectedIndex) / kItemsPerPage) * kItemsPerPage;
+  const int pageEnd = std::min(buttonCount, pageStart + kItemsPerPage);
+
+  for (int i = pageStart; i < pageEnd; ++i) {
+    const int posInPage = i - pageStart;
+    const int col = posInPage % kColumns;
+    const int row = posInPage / kColumns;
     const int tileX = rect.x + kSidePadding + col * (tileWidth + kGap);
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
