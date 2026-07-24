@@ -102,13 +102,13 @@ Tapping a synced feed opens its first article directly — no folder listing in 
 
 ## Wikipedia
 
-The Wikipedia tile on the home screen fetches three things from Wikipedia's own REST API, in the language you've set in Settings:
+The Wikipedia tile on the home screen fetches content from Wikipedia's own REST API, in the language you've set in Settings:
 
 - **Article of the Day** — the current featured article.
 - **On This Day** — a digest of historical events for today's date.
-- **Random Article** — exactly that.
+- **Random Article 1-5** — five random articles, each its own entry.
 
-None of these fetch on their own when selected — tap **Sync Now** first to download all three and save them to the SD card, then read them fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home. Files live under `.picoread/wikipedia/` and are overwritten on each sync — no history is kept.
+None of these fetch on their own when selected — tap **Sync Now** (below a divider, like the RSS reader's action row) to download everything and save it to the SD card, then read it fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home. Files live under `.picoread/wikipedia/` and are overwritten on each sync — no history is kept.
 
 ---
 

@@ -24,7 +24,12 @@ namespace {
 constexpr const char* kWikiDir = "/.picoread/wikipedia";
 constexpr const char* kArticlePath = "/.picoread/wikipedia/article.txt";
 constexpr const char* kOnThisDayPath = "/.picoread/wikipedia/onthisday.txt";
-constexpr const char* kRandomPath = "/.picoread/wikipedia/random.txt";
+
+std::string randomPath(int index) {
+  char buf[48];
+  snprintf(buf, sizeof(buf), "/.picoread/wikipedia/random%d.txt", index);
+  return buf;
+}
 
 // LANGUAGE_CODES matches Wikipedia's own subdomain codes for most entries, but a
 // couple of PicoRead's codes don't line up with Wikipedia's - "SI" here means
@@ -174,7 +179,7 @@ bool WikipediaActivity::downloadOnThisDay() {
   return writeTextFile(kOnThisDayPath, content);
 }
 
-bool WikipediaActivity::downloadRandomArticle() {
+bool WikipediaActivity::downloadRandomArticle(int index) {
   const std::string url = wikipediaApiBase() + "/page/random/summary";
 
   WikipediaSummaryParser parser;
@@ -195,7 +200,7 @@ bool WikipediaActivity::downloadRandomArticle() {
 
   Storage.mkdir(kWikiDir, true);
   const std::string content = parser.getTitle() + "\n\n" + parser.getExtract();
-  return writeTextFile(kRandomPath, content);
+  return writeTextFile(randomPath(index), content);
 }
 
 // Downloads all items in one pass so a device can be synced once (e.g. before
@@ -204,13 +209,13 @@ bool WikipediaActivity::downloadRandomArticle() {
 // openTextOrPromptSync().
 void WikipediaActivity::syncAll() {
   state = State::Busy;
-  constexpr int kTotal = 3;
+  const int total = 2 + kRandomCount;
   int step = 0;
 
   auto showProgress = [&] {
     ++step;
     char buf[32];
-    snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), step, kTotal);
+    snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), step, total);
     busyMessage = buf;
     requestUpdateAndWait();
   };
@@ -219,8 +224,10 @@ void WikipediaActivity::syncAll() {
   downloadArticleOfDay();
   showProgress();
   downloadOnThisDay();
-  showProgress();
-  downloadRandomArticle();
+  for (int i = 0; i < kRandomCount; ++i) {
+    showProgress();
+    downloadRandomArticle(i);
+  }
 
   state = State::List;
   requestUpdate();
@@ -247,10 +254,21 @@ void WikipediaActivity::openTextOrPromptSync(const std::string& path) {
   promptSync();
 }
 
+void WikipediaActivity::openContentEntry(int index) {
+  if (index == 0) {
+    openTextOrPromptSync(kArticlePath);
+  } else if (index == 1) {
+    openTextOrPromptSync(kOnThisDayPath);
+  } else {
+    openTextOrPromptSync(randomPath(index - 2));
+  }
+}
+
 void WikipediaActivity::loop() {
   if (state != State::List) return;
 
   const int count = itemCount();
+  const int contentCount = contentItemCount();
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     onGoHome();
@@ -258,21 +276,10 @@ void WikipediaActivity::loop() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    switch (selectorIndex) {
-      case 0:
-        openTextOrPromptSync(kArticlePath);
-        break;
-      case 1:
-        openTextOrPromptSync(kOnThisDayPath);
-        break;
-      case 2:
-        openTextOrPromptSync(kRandomPath);
-        break;
-      case 3:
-        ensureWifiThen([this] { syncAll(); });
-        break;
-      default:
-        break;
+    if (static_cast<int>(selectorIndex) < contentCount) {
+      openContentEntry(static_cast<int>(selectorIndex));
+    } else {
+      ensureWifiThen([this] { syncAll(); });
     }
     return;
   }
@@ -303,23 +310,39 @@ void WikipediaActivity::render(RenderLock&&) {
   }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const int contentBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  const int contentCount = contentItemCount();
 
+  const int actionsHeight = actionItemCount() * metrics.listRowHeight;
+  const int separatorGap = metrics.verticalSpacing;
+  const int contentRegionHeight =
+      std::max(metrics.listRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
+
+  const bool contentFocused = static_cast<int>(selectorIndex) < contentCount;
+
+  // Content region: Article of the Day, On This Day, then N random articles -
+  // labelled "Random Article N" (1-indexed) since there's more than one now.
   GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, itemCount(), static_cast<int>(selectorIndex),
+      renderer, Rect{0, contentTop, pageWidth, contentRegionHeight}, contentCount,
+      contentFocused ? static_cast<int>(selectorIndex) : -1,
       [](int index) -> std::string {
-        switch (index) {
-          case 0:
-            return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
-          case 1:
-            return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
-          case 2:
-            return I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE);
-          default:
-            return I18N.get(StrId::STR_RSS_SYNC_NOW);
-        }
+        if (index == 0) return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
+        if (index == 1) return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
+        char buf[48];
+        snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index - 1);
+        return buf;
       },
       nullptr, [](int) { return UIIcon::None; });
+
+  const int separatorY = contentTop + contentRegionHeight + separatorGap / 2;
+  renderer.drawLine(0, separatorY, pageWidth, separatorY);
+
+  const int actionsTop = contentTop + contentRegionHeight + separatorGap;
+  GUI.drawList(
+      renderer, Rect{0, actionsTop, pageWidth, actionsHeight}, actionItemCount(),
+      contentFocused ? -1 : static_cast<int>(selectorIndex) - contentCount,
+      [](int) -> std::string { return I18N.get(StrId::STR_RSS_SYNC_NOW); }, nullptr,
+      [](int) { return UIIcon::None; });
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

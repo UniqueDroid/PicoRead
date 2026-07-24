@@ -6,11 +6,12 @@
 #include "util/ButtonNavigator.h"
 
 // Home-screen "Wikipedia" tile: fetches the Wikimedia REST API's featured
-// article of the day, on-this-day digest, and a random article via a single
-// "Sync Now" action, saving all of them to fixed SD paths so they're readable
-// offline afterward - selecting an entry just opens the cached file, it does
-// not re-fetch. Uses the system's configured UI language to pick the
-// Wikipedia edition.
+// article of the day, on-this-day digest, and a handful of random articles via
+// a single "Sync Now" action, saving all of them to fixed SD paths so they're
+// readable offline afterward - selecting an entry just opens the cached file,
+// it does not re-fetch. Uses the system's configured UI language to pick the
+// Wikipedia edition. Layout mirrors RssFeedListActivity: content entries in
+// one region, a divider, then Sync Now below as its own action row.
 class WikipediaActivity final : public Activity {
   enum class State { List, Busy };
 
@@ -20,15 +21,19 @@ class WikipediaActivity final : public Activity {
   std::string busyMessage;
   bool shouldTearDownWifiOnExit = false;
 
-  static int itemCount() { return 4; }
+  static constexpr int kRandomCount = 5;
+  static int contentItemCount() { return 2 + kRandomCount; }  // Article of Day, On This Day, Random x N
+  static int actionItemCount() { return 1; }                  // Sync Now
+  static int itemCount() { return contentItemCount() + actionItemCount(); }
 
   void ensureWifiThen(const std::function<void()>& action);
   bool downloadArticleOfDay();
   bool downloadOnThisDay();
-  bool downloadRandomArticle();
+  bool downloadRandomArticle(int index);
   void syncAll();
   void openTextOrPromptSync(const std::string& path);
   void promptSync();
+  void openContentEntry(int index);
 
  public:
   explicit WikipediaActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
