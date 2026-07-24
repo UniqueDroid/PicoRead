@@ -8,6 +8,7 @@
 class ReadingStatsActivity final : public Activity {
   void drawStatsCard(int x, int y, int width, const std::string& title, uint32_t sessions, uint32_t minutes,
                      uint32_t pages) const;
+  void startResetFlow();
 
  public:
   explicit ReadingStatsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

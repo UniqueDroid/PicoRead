@@ -5,6 +5,8 @@
 #include <I18n.h>
 #include <Logging.h>
 
+#include <algorithm>
+
 #include "MappedInputManager.h"
 #include "RssFeedStore.h"
 #include "components/UITheme.h"
@@ -89,13 +91,25 @@ void RssFeedManageActivity::render(RenderLock&&) {
   } else {
     const auto& feeds = RSS_STORE.getFeeds();
     const auto feedCount = feeds.size();
+    const bool feedFocused = static_cast<size_t>(selectorIndex) < feedCount;
+
+    const int deleteAllRowHeight = metrics.listRowHeight;
+    const int separatorGap = metrics.verticalSpacing;
+    const int feedListHeight = std::max(metrics.listRowHeight, contentHeight - separatorGap - deleteAllRowHeight);
+
     GUI.drawList(
-        renderer, Rect{0, contentTop, pageWidth, contentHeight}, count, static_cast<int>(selectorIndex),
-        [&feeds, feedCount](int index) -> std::string {
-          if (static_cast<size_t>(index) < feedCount) return feeds[index].title;
-          return I18N.get(StrId::STR_RSS_DELETE_ALL_FEEDS);
-        },
-        nullptr, [feedCount](int index) { return static_cast<size_t>(index) < feedCount ? UIIcon::Library : UIIcon::None; });
+        renderer, Rect{0, contentTop, pageWidth, feedListHeight}, static_cast<int>(feedCount),
+        feedFocused ? static_cast<int>(selectorIndex) : -1, [&feeds](int index) -> std::string { return feeds[index].title; },
+        nullptr, [](int) { return UIIcon::Library; });
+
+    const int separatorY = contentTop + feedListHeight + separatorGap / 2;
+    renderer.drawLine(0, separatorY, pageWidth, separatorY);
+
+    const int deleteAllTop = contentTop + feedListHeight + separatorGap;
+    GUI.drawList(
+        renderer, Rect{0, deleteAllTop, pageWidth, deleteAllRowHeight}, 1, feedFocused ? -1 : 0,
+        [](int) -> std::string { return I18N.get(StrId::STR_RSS_DELETE_ALL_FEEDS); }, nullptr,
+        [](int) { return UIIcon::None; });
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

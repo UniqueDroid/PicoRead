@@ -60,6 +60,11 @@ void ReadingStatsStore::addSession(const std::string& bookPath, uint16_t minutes
   saveToFile();
 }
 
+void ReadingStatsStore::resetAll() {
+  books.clear();
+  saveToFile();
+}
+
 const BookReadingStat* ReadingStatsStore::getBook(const std::string& bookPath) const {
   auto it = std::find_if(books.begin(), books.end(), [&bookPath](const BookReadingStat& b) { return b.bookPath == bookPath; });
   return it != books.end() ? &(*it) : nullptr;

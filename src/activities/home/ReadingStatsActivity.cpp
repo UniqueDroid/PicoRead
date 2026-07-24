@@ -8,6 +8,7 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -32,7 +33,22 @@ void ReadingStatsActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) ||
       mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     onGoHome();
+    return;
   }
+  if (mappedInput.wasReleased(MappedInputManager::Button::NavNext)) {
+    startResetFlow();
+  }
+}
+
+void ReadingStatsActivity::startResetFlow() {
+  startActivityForResult(
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_READING_STATS), tr(STR_RESET_STATS_CONFIRM)),
+      [this](const ActivityResult& result) {
+        if (!result.isCancelled) {
+          READING_STATS.resetAll();
+        }
+        requestUpdate();
+      });
 }
 
 void ReadingStatsActivity::drawStatsCard(int x, int y, int width, const std::string& title, uint32_t sessions,
@@ -97,7 +113,7 @@ void ReadingStatsActivity::render(RenderLock&&) {
   drawStatsCard(cardX, cardY, cardWidth, tr(STR_ALL_BOOKS), READING_STATS.totalSessions(), READING_STATS.totalMinutes(),
                 READING_STATS.totalPages());
 
-  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), "", "");
+  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), "", tr(STR_RESET_STATS));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

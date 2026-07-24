@@ -37,6 +37,9 @@ class ReadingStatsStore : public PersistableStore<ReadingStatsStore> {
   // Persists to file.
   void addSession(const std::string& bookPath, uint16_t minutes, uint16_t pages);
 
+  // Clears all tracked reading stats for every book. Persists to file.
+  void resetAll();
+
   // Returns nullptr if the book has no tracked reading.
   const BookReadingStat* getBook(const std::string& bookPath) const;
 
