@@ -259,6 +259,13 @@ class PicoReadSettings {
   char sdFontFamilyName[32] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
+  // Larger UI text in lists/headers/popups (0 = compact/original size, 1 = large). Default on:
+  // shipped as a hardcoded increase first, this setting was added afterward to make it
+  // reversible rather than the other way around. Doesn't affect the status bar while
+  // reading, the bottom button hints, home-screen tiles, or keyboard keys - see
+  // BaseTheme.cpp's useLargeUiFont()/contentFontId()/subtitleFontId() for exactly which
+  // draw calls this controls.
+  uint8_t uiLargeFont = 1;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)
   uint8_t removeReadBooksFromRecents = 0;
   // Move epub to /Read/ folder on SD card when finished (0 = disabled, 1 = enabled)

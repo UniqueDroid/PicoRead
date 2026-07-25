@@ -31,6 +31,27 @@ bool statusBarTextLaneVisible() {
          (SETTINGS.statusBarClock && halClock.isAvailable());
 }
 
+// Settings > System > "Larger UI Font" - covers lists (Settings, File Browser,
+// Bookmarks, OPDS, RSS/Wiki/Gutenberg, ...), page headers, sub-headers, the
+// Settings tab bar, Recent Books cover title/author, and popups/text fields.
+// Deliberately does NOT touch: the status bar while reading, bottom button
+// hints, home-screen tiles, or keyboard keys - those stay at their original
+// size regardless of this setting (see PicoReadSettings.h's uiLargeFont
+// comment for the reasoning).
+bool useLargeUiFont() { return SETTINGS.uiLargeFont != 0; }
+int contentFontId() { return useLargeUiFont() ? UI_12_FONT_ID : UI_10_FONT_ID; }
+int subtitleFontId() { return useLargeUiFont() ? UI_10_FONT_ID : SMALL_FONT_ID; }
+
+// BaseMetrics::values.listRowHeight/listWithSubtitleRowHeight are the compact
+// (original) sizes; the large variants are only ever needed here, so kept as
+// local constants rather than a second static metrics struct.
+int listRowHeightFor(bool hasSubtitle) {
+  if (!useLargeUiFont()) {
+    return hasSubtitle ? BaseMetrics::values.listWithSubtitleRowHeight : BaseMetrics::values.listRowHeight;
+  }
+  return hasSubtitle ? 56 : 36;
+}
+
 void drawBookmarkStatusIcon(const GfxRenderer& renderer, const int x, const int y) {
   constexpr int bytesPerRow = bookmarkStatusIconWidth / 8;
   for (int row = 0; row < bookmarkStatusIconHeight; ++row) {
@@ -250,8 +271,7 @@ void BaseTheme::drawSideButtonHints(const GfxRenderer& renderer, const char* top
 }
 
 int BaseTheme::getListPageItems(int contentHeight, bool hasSubtitle) const {
-  int rowHeight = (hasSubtitle) ? BaseMetrics::values.listWithSubtitleRowHeight : BaseMetrics::values.listRowHeight;
-  return contentHeight / rowHeight;
+  return contentHeight / listRowHeightFor(hasSubtitle);
 }
 
 void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, int selectedIndex,
@@ -260,8 +280,7 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
                          const std::function<UIIcon(int index)>& rowIcon,
                          const std::function<std::string(int index)>& rowValue, bool highlightValue,
                          const std::function<bool(int index)>& rowDimmed) const {
-  int rowHeight =
-      (rowSubtitle != nullptr) ? BaseMetrics::values.listWithSubtitleRowHeight : BaseMetrics::values.listRowHeight;
+  int rowHeight = listRowHeightFor(rowSubtitle != nullptr);
   int pageItems = rect.height / rowHeight;
 
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
@@ -313,14 +332,14 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
       valueText = rowValue(i);
       if (!valueText.empty()) {
         int maxValW = std::max(0, rowTextWidth - 40 - minValueGap);
-        valueText = renderer.truncatedText(UI_12_FONT_ID, valueText.c_str(), maxValW);
-        int valueWidth = renderer.getTextWidth(UI_12_FONT_ID, valueText.c_str()) + minValueGap;
+        valueText = renderer.truncatedText(contentFontId(), valueText.c_str(), maxValW);
+        int valueWidth = renderer.getTextWidth(contentFontId(), valueText.c_str()) + minValueGap;
         rowTextWidth -= valueWidth;
       }
     }
 
     auto itemName = rowTitle(i);
-    auto font = UI_12_FONT_ID;
+    auto font = contentFontId();
     auto item = renderer.truncatedText(font, itemName.c_str(), rowTextWidth);
     renderer.drawText(font, rect.x + BaseMetrics::values.contentSidePadding, itemY, item.c_str(), i != selectedIndex);
 
@@ -334,22 +353,23 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
           if ((px + py) % 2 == 0) renderer.drawPixel(px, py, false);
     }
 
+    const int titleLineHeight = renderer.getLineHeight(font);
     if (rowSubtitle != nullptr) {
       std::string subtitleText = rowSubtitle(i);
       if (!subtitleText.empty()) {
-        auto subtitle = renderer.truncatedText(SMALL_FONT_ID, subtitleText.c_str(), rowTextWidth);
-        renderer.drawText(SMALL_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 22, subtitle.c_str(),
-                          i != selectedIndex);
+        auto subtitle = renderer.truncatedText(subtitleFontId(), subtitleText.c_str(), rowTextWidth);
+        renderer.drawText(subtitleFontId(), rect.x + BaseMetrics::values.contentSidePadding,
+                          itemY + titleLineHeight, subtitle.c_str(), i != selectedIndex);
       }
     }
 
     if (!valueText.empty()) {
-      const auto valueTextWidth = renderer.getTextWidth(UI_12_FONT_ID, valueText.c_str());
+      const auto valueTextWidth = renderer.getTextWidth(contentFontId(), valueText.c_str());
       int valueY = itemY;
       if (rowSubtitle != nullptr) {
-        valueY = itemY + 10;
+        valueY = itemY + titleLineHeight / 2;
       }
-      renderer.drawText(UI_12_FONT_ID, rect.x + contentWidth - BaseMetrics::values.contentSidePadding - valueTextWidth,
+      renderer.drawText(contentFontId(), rect.x + contentWidth - BaseMetrics::values.contentSidePadding - valueTextWidth,
                         valueY, valueText.c_str(), i != selectedIndex);
     }
   }
@@ -371,10 +391,10 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
 
   if (title) {
     int padding = rect.width - batteryX + BaseMetrics::values.batteryWidth;
-    auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,
+    auto truncatedTitle = renderer.truncatedText(contentFontId(), title,
                                                  rect.width - padding * 2 - BaseMetrics::values.contentSidePadding * 2,
                                                  EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawCenteredText(contentFontId(), rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
   }
 
   if (subtitle) {
@@ -406,8 +426,8 @@ void BaseTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char
   }
 
   auto truncatedLabel = renderer.truncatedText(
-      UI_12_FONT_ID, label, rect.width - BaseMetrics::values.contentSidePadding - rightSpace, EpdFontFamily::REGULAR);
-  renderer.drawText(UI_12_FONT_ID, currentX, rect.y, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
+      contentFontId(), label, rect.width - BaseMetrics::values.contentSidePadding - rightSpace, EpdFontFamily::REGULAR);
+  renderer.drawText(contentFontId(), currentX, rect.y, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
 }
 
 void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const std::vector<TabInfo>& tabs,
@@ -415,13 +435,13 @@ void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const s
   constexpr int underlineHeight = 2;  // Height of selection underline
   constexpr int underlineGap = 4;     // Gap between text and underline
 
-  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int lineHeight = renderer.getLineHeight(contentFontId());
 
   int currentX = rect.x + BaseMetrics::values.contentSidePadding;
 
   for (const auto& tab : tabs) {
     const int textWidth =
-        renderer.getTextWidth(UI_12_FONT_ID, tab.label, tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+        renderer.getTextWidth(contentFontId(), tab.label, tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
 
     // Draw underline for selected tab
     if (tab.selected) {
@@ -433,7 +453,7 @@ void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const s
     }
 
     // Draw tab label
-    renderer.drawText(UI_12_FONT_ID, currentX, rect.y, tab.label, !(tab.selected && selected),
+    renderer.drawText(contentFontId(), currentX, rect.y, tab.label, !(tab.selected && selected),
                       tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
 
     currentX += textWidth + BaseMetrics::values.tabSpacing;
@@ -590,20 +610,19 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     // - With cover: selected = white text on black box, unselected = black text on white box
     // - Without cover: selected = white text on black card, unselected = black text on white card
 
-    auto lines = renderer.wrappedText(UI_12_FONT_ID, lastBookTitle.c_str(), bookWidth - 40, 3);
+    auto lines = renderer.wrappedText(contentFontId(), lastBookTitle.c_str(), bookWidth - 40, 3);
 
     // Book title text
-    int totalTextHeight = renderer.getLineHeight(UI_12_FONT_ID) * static_cast<int>(lines.size());
+    int totalTextHeight = renderer.getLineHeight(contentFontId()) * static_cast<int>(lines.size());
     if (!lastBookAuthor.empty()) {
-      totalTextHeight += renderer.getLineHeight(UI_10_FONT_ID) * 3 / 2;
+      totalTextHeight += renderer.getLineHeight(subtitleFontId()) * 3 / 2;
     }
 
     // Vertically center the title block within the card
     int titleYStart = bookY + (bookHeight - totalTextHeight) / 2;
 
-    const auto truncatedAuthor = lastBookAuthor.empty()
-                                     ? std::string{}
-                                     : renderer.truncatedText(UI_10_FONT_ID, lastBookAuthor.c_str(), bookWidth - 40);
+    const auto truncatedAuthor =
+        lastBookAuthor.empty() ? std::string{} : renderer.truncatedText(subtitleFontId(), lastBookAuthor.c_str(), bookWidth - 40);
 
     // If cover image was rendered, draw box behind title and author
     if (coverRendered) {
@@ -611,13 +630,13 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
       // Calculate the max text width for the box
       int maxTextWidth = 0;
       for (const auto& line : lines) {
-        const int lineWidth = renderer.getTextWidth(UI_12_FONT_ID, line.c_str());
+        const int lineWidth = renderer.getTextWidth(contentFontId(), line.c_str());
         if (lineWidth > maxTextWidth) {
           maxTextWidth = lineWidth;
         }
       }
       if (!truncatedAuthor.empty()) {
-        const int authorWidth = renderer.getTextWidth(UI_10_FONT_ID, truncatedAuthor.c_str());
+        const int authorWidth = renderer.getTextWidth(subtitleFontId(), truncatedAuthor.c_str());
         if (authorWidth > maxTextWidth) {
           maxTextWidth = authorWidth;
         }
@@ -635,13 +654,13 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     }
 
     for (const auto& line : lines) {
-      renderer.drawCenteredText(UI_12_FONT_ID, titleYStart, line.c_str(), !bookSelected);
-      titleYStart += renderer.getLineHeight(UI_12_FONT_ID);
+      renderer.drawCenteredText(contentFontId(), titleYStart, line.c_str(), !bookSelected);
+      titleYStart += renderer.getLineHeight(contentFontId());
     }
 
     if (!truncatedAuthor.empty()) {
-      titleYStart += renderer.getLineHeight(UI_10_FONT_ID) / 2;
-      renderer.drawCenteredText(UI_10_FONT_ID, titleYStart, truncatedAuthor.c_str(), !bookSelected);
+      titleYStart += renderer.getLineHeight(subtitleFontId()) / 2;
+      renderer.drawCenteredText(subtitleFontId(), titleYStart, truncatedAuthor.c_str(), !bookSelected);
     }
 
     // "Continue Reading" label at the bottom
@@ -720,8 +739,8 @@ Rect BaseTheme::drawPopup(const GfxRenderer& renderer, const char* message) cons
   const EpdFontFamily::Style popupFontFamily = metrics.popupTextBold ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
   // Scale y position proportionally to screen height
   const int y = static_cast<int>(renderer.getScreenHeight() * metrics.popupTopOffsetRatio);
-  const int textWidth = renderer.getTextWidth(UI_12_FONT_ID, message, popupFontFamily);
-  const int textHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int textWidth = renderer.getTextWidth(contentFontId(), message, popupFontFamily);
+  const int textHeight = renderer.getLineHeight(contentFontId());
   const int w = textWidth + marginX * 2;
   const int h = textHeight + marginY * 2;
   const int x = (renderer.getScreenWidth() - w) / 2;
@@ -738,7 +757,7 @@ Rect BaseTheme::drawPopup(const GfxRenderer& renderer, const char* message) cons
 
   const int textX = x + (w - textWidth) / 2;
   const int textY = y + marginY + metrics.popupTextBaselineOffsetY;
-  renderer.drawText(UI_12_FONT_ID, textX, textY, message, metrics.popupTextInverted, popupFontFamily);
+  renderer.drawText(contentFontId(), textX, textY, message, metrics.popupTextInverted, popupFontFamily);
   renderer.displayBuffer();
   return Rect{x, y, w, h};
 }
