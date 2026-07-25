@@ -3,6 +3,7 @@
 #include <string>
 
 #include "../Activity.h"
+#include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
 // "Manage Feeds" screen reached from the RSS tile: lists subscribed feeds plus a
@@ -14,11 +15,8 @@ class RssFeedManageActivity final : public Activity {
   size_t selectorIndex = 0;
 
   // Marquee-scrolls the selected feed row's title when it's too long to fit -
-  // same mechanism as RssFeedListActivity/RssArticleListActivity.
-  size_t scrollTitleOffset = 0;
-  unsigned long nextScrollStepMs = 0;
-  void resetScroll();
-  void stepScroll(const std::string& title);
+  // shared mechanism, see ScrollingListRow.h.
+  MarqueeScroller scroller;
 
   int itemCount() const;
   void deleteFeed(size_t feedIndex);

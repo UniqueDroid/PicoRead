@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
 struct GutenbergDownloadedBook {
@@ -20,12 +21,9 @@ class GutenbergManageActivity final : public Activity {
   size_t selectorIndex = 0;
   std::vector<GutenbergDownloadedBook> books;
 
-  // Marquee-scrolls the selected row's title when it's too long to fit - same
-  // mechanism as the RSS lists.
-  size_t scrollTitleOffset = 0;
-  unsigned long nextScrollStepMs = 0;
-  void resetScroll();
-  void stepScroll(const std::string& title);
+  // Marquee-scrolls the selected row's title when it's too long to fit - shared
+  // mechanism, see ScrollingListRow.h.
+  MarqueeScroller scroller;
 
   void loadBooks();
   int bookCount() const { return static_cast<int>(books.size()); }

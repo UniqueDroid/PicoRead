@@ -25,21 +25,6 @@
 namespace {
 // Dropped onto the SD card root by the user on their PC; see sdcard/rss_feeds_import.json for the format.
 constexpr const char* kImportFilePath = "/rss_feeds_import.json";
-
-// Same pacing as RssArticleListActivity's marquee - see there for why.
-constexpr unsigned long kScrollStepMs = 480;
-constexpr unsigned long kScrollPauseMs = 1200;
-
-// Shared by the feed region and the action region below: both now draw at the
-// larger UI_12_FONT_ID instead of GUI.drawList's fixed smaller font.
-void drawBigRow(const GfxRenderer& renderer, int pageWidth, int sidePadding, int rowY, int rowHeight,
-                const std::string& text, bool selected) {
-  if (selected) renderer.fillRect(0, rowY, pageWidth, rowHeight);
-  const int maxWidth = pageWidth - sidePadding * 2;
-  const std::string truncated = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
-  const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
-  renderer.drawText(UI_12_FONT_ID, sidePadding, textY, truncated.c_str(), !selected);
-}
 }  // namespace
 
 int RssFeedListActivity::feedRegionCount() const {
@@ -53,38 +38,8 @@ void RssFeedListActivity::onEnter() {
   Activity::onEnter();
   state = State::List;
   selectorIndex = 0;
-  resetScroll();
+  scroller.reset();
   requestUpdate();
-}
-
-void RssFeedListActivity::resetScroll() {
-  scrollTitleOffset = 0;
-  nextScrollStepMs = millis() + kScrollPauseMs;
-}
-
-void RssFeedListActivity::stepScroll(const std::string& title) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
-  if (renderer.getTextWidth(UI_12_FONT_ID, title.c_str()) <= maxWidth) return;  // fits, nothing to scroll
-
-  const unsigned long now = millis();
-  if (now < nextScrollStepMs) return;
-
-  size_t fitLen = 0;
-  while (scrollTitleOffset + fitLen < title.size()) {
-    const std::string sub = title.substr(scrollTitleOffset, fitLen + 1);
-    if (renderer.getTextWidth(UI_12_FONT_ID, sub.c_str()) > maxWidth) break;
-    fitLen++;
-  }
-
-  if (scrollTitleOffset + fitLen >= title.size()) {
-    scrollTitleOffset = 0;
-    nextScrollStepMs = now + kScrollPauseMs;
-  } else {
-    scrollTitleOffset++;
-    nextScrollStepMs = now + kScrollStepMs;
-  }
-  requestUpdate(true);
 }
 
 void RssFeedListActivity::onExit() {
@@ -353,17 +308,19 @@ void RssFeedListActivity::loop() {
 
   buttonNavigator.onNextRelease([this, count] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this, count] {
     selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
 
   if (hasFeeds && static_cast<int>(selectorIndex) < feedRegion) {
-    stepScroll(RSS_STORE.getFeeds()[selectorIndex].title);
+    const auto& metrics = UITheme::getInstance().getMetrics();
+    const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
+    if (scroller.step(renderer, RSS_STORE.getFeeds()[selectorIndex].title, maxWidth)) requestUpdate(true);
   }
 }
 
@@ -391,7 +348,7 @@ void RssFeedListActivity::render(RenderLock&&) {
   // Custom rendering (not GUI.drawList, which hardcodes a smaller shared font)
   // so this screen can use the bigger UI_12_FONT_ID and marquee-scroll long
   // feed titles - see RssArticleListActivity for the same pattern.
-  const int bigRowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+  const int bigRowHeight = ScrollingListRow::rowHeight(renderer);
   const int actionsHeight = actionRowCount() * bigRowHeight;
   const int separatorGap = metrics.verticalSpacing;
   const int feedRegionHeight = std::max(bigRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
@@ -405,10 +362,8 @@ void RssFeedListActivity::render(RenderLock&&) {
     const int rowY = contentTop + (i - feedPageStart) * bigRowHeight;
     const bool selected = feedRegionFocused && i == static_cast<int>(selectorIndex);
     const std::string fullTitle = hasFeeds ? feeds[i].title : tr(STR_RSS_NO_FEEDS);
-    const std::string text = (selected && scrollTitleOffset > 0 && scrollTitleOffset < fullTitle.size())
-                                 ? fullTitle.substr(scrollTitleOffset)
-                                 : fullTitle;
-    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
+    const std::string text = selected ? scroller.visibleText(fullTitle) : fullTitle;
+    ScrollingListRow::draw(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
   }
 
   const int separatorY = contentTop + feedRegionHeight + separatorGap / 2;
@@ -433,7 +388,7 @@ void RssFeedListActivity::render(RenderLock&&) {
     }
     const int rowY = actionsTop + i * bigRowHeight;
     const bool selected = !feedRegionFocused && i == static_cast<int>(selectorIndex) - feedRegion;
-    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, label, selected);
+    ScrollingListRow::draw(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, label, selected);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

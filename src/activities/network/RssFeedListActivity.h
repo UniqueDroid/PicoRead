@@ -3,6 +3,7 @@
 #include <string>
 
 #include "../Activity.h"
+#include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
 // Home-screen "RSS" tile: manage subscribed feeds and sync them for offline
@@ -24,11 +25,8 @@ class RssFeedListActivity final : public Activity {
   bool shouldTearDownWifiOnExit = false;
 
   // Marquee-scrolls the selected feed row's title when it's too long to fit -
-  // same mechanism as RssArticleListActivity, see there for the pacing notes.
-  size_t scrollTitleOffset = 0;
-  unsigned long nextScrollStepMs = 0;
-  void resetScroll();
-  void stepScroll(const std::string& title);
+  // shared mechanism, see ScrollingListRow.h.
+  MarqueeScroller scroller;
 
   // 1 when there are no feeds yet (a non-actionable placeholder row), else one row
   // per feed.

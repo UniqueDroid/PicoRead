@@ -26,13 +26,6 @@ std::string readFirstLine(const std::string& path) {
   const char* newline = strchr(buf, '\n');
   return newline ? std::string(buf, newline - buf) : std::string(buf, n);
 }
-
-// Paced for e-ink: a full-screen refresh on this panel takes ~450ms (see
-// other activities' "Time = ... ms from clearScreen to displayBuffer" logs),
-// so the step interval stays comfortably above that to avoid stacking update
-// requests - with a visible pause at both ends of the scroll.
-constexpr unsigned long kScrollStepMs = 480;
-constexpr unsigned long kScrollPauseMs = 1200;
 }  // namespace
 
 void RssArticleListActivity::loadTitles() {
@@ -76,43 +69,8 @@ void RssArticleListActivity::onEnter() {
   const auto& feeds = RSS_STORE.getFeeds();
   feedTitle = feedIndex < feeds.size() ? feeds[feedIndex].title : tr(STR_RSS_FEEDS);
   loadTitles();
-  resetScroll();
+  scroller.reset();
   requestUpdate();
-}
-
-void RssArticleListActivity::resetScroll() {
-  scrollTitleOffset = 0;
-  nextScrollStepMs = millis() + kScrollPauseMs;
-}
-
-void RssArticleListActivity::stepScroll() {
-  if (titles.empty() || selectorIndex >= titles.size()) return;
-  const std::string& title = titles[selectorIndex];
-
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
-  if (renderer.getTextWidth(UI_12_FONT_ID, title.c_str()) <= maxWidth) return;  // fits, nothing to scroll
-
-  const unsigned long now = millis();
-  if (now < nextScrollStepMs) return;
-
-  // How many characters fit on screen starting at the current offset?
-  size_t fitLen = 0;
-  while (scrollTitleOffset + fitLen < title.size()) {
-    const std::string sub = title.substr(scrollTitleOffset, fitLen + 1);
-    if (renderer.getTextWidth(UI_12_FONT_ID, sub.c_str()) > maxWidth) break;
-    fitLen++;
-  }
-
-  if (scrollTitleOffset + fitLen >= title.size()) {
-    // Reached the end of the title - pause there, then restart from the top.
-    scrollTitleOffset = 0;
-    nextScrollStepMs = now + kScrollPauseMs;
-  } else {
-    scrollTitleOffset++;
-    nextScrollStepMs = now + kScrollStepMs;
-  }
-  requestUpdate(true);
 }
 
 void RssArticleListActivity::loop() {
@@ -132,16 +90,20 @@ void RssArticleListActivity::loop() {
 
   buttonNavigator.onNextRelease([this, count] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this, count] {
     selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
 
-  stepScroll();
+  if (!titles.empty() && selectorIndex < titles.size()) {
+    const auto& metrics = UITheme::getInstance().getMetrics();
+    const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
+    if (scroller.step(renderer, titles[selectorIndex], maxWidth)) requestUpdate(true);
+  }
 }
 
 void RssArticleListActivity::render(RenderLock&&) {
@@ -162,26 +124,17 @@ void RssArticleListActivity::render(RenderLock&&) {
     // Custom list rendering (not GUI.drawList) so this screen alone can use a
     // bigger font and marquee-scroll the selected row - drawList is shared by
     // every list screen in the app and hardcodes its own smaller font.
-    const int rowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+    const int rowHeight = ScrollingListRow::rowHeight(renderer);
     const int pageItems = std::max(1, contentHeight / rowHeight);
     const int itemCount = static_cast<int>(titles.size());
     const int pageStart = static_cast<int>(selectorIndex) / pageItems * pageItems;
-    const int maxWidth = pageWidth - metrics.contentSidePadding * 2;
 
     for (int i = pageStart; i < itemCount && i < pageStart + pageItems; i++) {
       const int rowY = contentTop + (i - pageStart) * rowHeight;
       const bool selected = i == static_cast<int>(selectorIndex);
-      if (selected) {
-        renderer.fillRect(0, rowY, pageWidth, rowHeight);
-      }
-
       const std::string& fullTitle = titles[i];
-      std::string text = (selected && scrollTitleOffset > 0 && scrollTitleOffset < fullTitle.size())
-                             ? fullTitle.substr(scrollTitleOffset)
-                             : fullTitle;
-      text = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
-      const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
-      renderer.drawText(UI_12_FONT_ID, metrics.contentSidePadding, textY, text.c_str(), !selected);
+      const std::string text = selected ? scroller.visibleText(fullTitle) : fullTitle;
+      ScrollingListRow::draw(renderer, pageWidth, metrics.contentSidePadding, rowY, rowHeight, text, selected);
     }
   }
 

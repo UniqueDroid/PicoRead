@@ -6,6 +6,7 @@
 #include "../Activity.h"
 #include "GutenbergJsonParser.h"
 #include "GutenbergPaths.h"
+#include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
 // Home-screen "Gutenberg" tile: browses a fixed handful of public-domain books via
@@ -34,12 +35,9 @@ class GutenbergActivity final : public Activity {
   bool shouldTearDownWifiOnExit = false;
   std::vector<GutenbergBook> popularBooks;  // in-memory only, loaded fresh each "Sync Now"
 
-  // Marquee-scrolls the selected row's title when it's too long to fit - same
-  // mechanism as the RSS lists.
-  size_t scrollTitleOffset = 0;
-  unsigned long nextScrollStepMs = 0;
-  void resetScroll();
-  void stepScroll(const std::string& title);
+  // Marquee-scrolls the selected row's title when it's too long to fit - shared
+  // mechanism, see ScrollingListRow.h.
+  MarqueeScroller scroller;
   std::string contentLabelFor(int index) const;
 
   static constexpr int kPopularCount = GutenbergPaths::kPopularCount;

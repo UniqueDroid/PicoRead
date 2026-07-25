@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
 // Reached by selecting a feed in RssFeedListActivity: lists every synced
@@ -20,15 +21,11 @@ class RssArticleListActivity final : public Activity {
   std::string dir;
   std::vector<std::string> titles;
 
-  // Marquee-scrolls the selected row's title when it's too long to fit at the
-  // larger font this list uses - see render()/loop(). Reset whenever the
-  // selection moves.
-  size_t scrollTitleOffset = 0;
-  unsigned long nextScrollStepMs = 0;
+  // Marquee-scrolls the selected row's title when it's too long to fit - shared
+  // mechanism, see ScrollingListRow.h.
+  MarqueeScroller scroller;
 
   void loadTitles();
-  void resetScroll();
-  void stepScroll();
 
  public:
   RssArticleListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, size_t feedIndex)

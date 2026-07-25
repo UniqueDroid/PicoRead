@@ -20,21 +20,6 @@
 using GutenbergPaths::popularBookPath;
 using GutenbergPaths::writeTextFile;
 
-namespace {
-// Same pacing as the RSS lists - see RssArticleListActivity for why.
-constexpr unsigned long kScrollStepMs = 480;
-constexpr unsigned long kScrollPauseMs = 1200;
-
-void drawBigRow(const GfxRenderer& renderer, int pageWidth, int sidePadding, int rowY, int rowHeight,
-                const std::string& text, bool selected) {
-  if (selected) renderer.fillRect(0, rowY, pageWidth, rowHeight);
-  const int maxWidth = pageWidth - sidePadding * 2;
-  const std::string truncated = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
-  const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
-  renderer.drawText(UI_12_FONT_ID, sidePadding, textY, truncated.c_str(), !selected);
-}
-}  // namespace
-
 std::string GutenbergActivity::contentLabelFor(int index) const {
   if (index == 0) return I18N.get(StrId::STR_GUTENBERG_RANDOM_BOOK);
   const size_t popularIndex = static_cast<size_t>(index - 1);
@@ -53,39 +38,9 @@ void GutenbergActivity::onEnter() {
   // re-fetching every time the tile is revisited, unlike the actual EPUBs which
   // are only ever fetched on selection (see class comment in the header).
   popularBooks = GutenbergPaths::loadPopularBooksFromDisk();
-  resetScroll();
+  scroller.reset();
 
   requestUpdate();
-}
-
-void GutenbergActivity::resetScroll() {
-  scrollTitleOffset = 0;
-  nextScrollStepMs = millis() + kScrollPauseMs;
-}
-
-void GutenbergActivity::stepScroll(const std::string& title) {
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
-  if (renderer.getTextWidth(UI_12_FONT_ID, title.c_str()) <= maxWidth) return;
-
-  const unsigned long now = millis();
-  if (now < nextScrollStepMs) return;
-
-  size_t fitLen = 0;
-  while (scrollTitleOffset + fitLen < title.size()) {
-    const std::string sub = title.substr(scrollTitleOffset, fitLen + 1);
-    if (renderer.getTextWidth(UI_12_FONT_ID, sub.c_str()) > maxWidth) break;
-    fitLen++;
-  }
-
-  if (scrollTitleOffset + fitLen >= title.size()) {
-    scrollTitleOffset = 0;
-    nextScrollStepMs = now + kScrollPauseMs;
-  } else {
-    scrollTitleOffset++;
-    nextScrollStepMs = now + kScrollStepMs;
-  }
-  requestUpdate(true);
 }
 
 void GutenbergActivity::onExit() {
@@ -263,17 +218,19 @@ void GutenbergActivity::loop() {
 
   buttonNavigator.onNextRelease([this, count] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this, count] {
     selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), count);
-    resetScroll();
+    scroller.reset();
     requestUpdate();
   });
 
   if (static_cast<int>(selectorIndex) < contentCount) {
-    stepScroll(contentLabelFor(static_cast<int>(selectorIndex)));
+    const auto& metrics = UITheme::getInstance().getMetrics();
+    const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
+    if (scroller.step(renderer, contentLabelFor(static_cast<int>(selectorIndex)), maxWidth)) requestUpdate(true);
   }
 }
 
@@ -296,7 +253,7 @@ void GutenbergActivity::render(RenderLock&&) {
   const int contentBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int contentCount = contentItemCount();
 
-  const int bigRowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+  const int bigRowHeight = ScrollingListRow::rowHeight(renderer);
   const int actionsHeight = actionItemCount() * bigRowHeight;
   const int separatorGap = metrics.verticalSpacing;
   const int contentRegionHeight = std::max(bigRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
@@ -310,10 +267,8 @@ void GutenbergActivity::render(RenderLock&&) {
     const int rowY = contentTop + (i - contentPageStart) * bigRowHeight;
     const bool selected = contentFocused && i == static_cast<int>(selectorIndex);
     const std::string fullTitle = contentLabelFor(i);
-    const std::string text = (selected && scrollTitleOffset > 0 && scrollTitleOffset < fullTitle.size())
-                                 ? fullTitle.substr(scrollTitleOffset)
-                                 : fullTitle;
-    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
+    const std::string text = selected ? scroller.visibleText(fullTitle) : fullTitle;
+    ScrollingListRow::draw(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
   }
 
   const int separatorY = contentTop + contentRegionHeight + separatorGap / 2;
@@ -324,7 +279,7 @@ void GutenbergActivity::render(RenderLock&&) {
     const std::string label = i == 0 ? I18N.get(StrId::STR_RSS_SYNC_NOW) : I18N.get(StrId::STR_GUTENBERG_MANAGE_BOOKS);
     const int rowY = actionsTop + i * bigRowHeight;
     const bool selected = !contentFocused && i == static_cast<int>(selectorIndex) - contentCount;
-    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, label, selected);
+    ScrollingListRow::draw(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, label, selected);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
