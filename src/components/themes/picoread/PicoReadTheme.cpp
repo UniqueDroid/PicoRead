@@ -155,23 +155,23 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
         renderer.drawIcon(CoverIcon, tileX + kCoverHPadding + 24, tileY + 24, 32);
 
         // Generated placeholder cover for books with no real cover art (RSS/Wikipedia
-        // articles): the title (and, if set, a source subtitle - feed name / Wikipedia
-        // category, see TxtReaderActivity::onEnter) drawn white-on-black in the upper
-        // part of the black fill. Sits above the separate title/author overlay box
-        // drawn later, which occupies the bottom of the same fill.
+        // articles): the title/author overlay box drawn later always shows the title
+        // (same as every other book, real cover or not), so this fill shows the
+        // *source* instead - RSS feed name / Wikipedia category, see
+        // TxtReaderActivity::onEnter - white-on-black, wrapped and centered. Falls
+        // back to the title for older recents entries saved before the subtitle
+        // existed, so the fill isn't left blank.
+        const std::string& generatedText =
+            recentBooks[i].author.empty() ? recentBooks[i].title : recentBooks[i].author;
         const int genMaxWidth = blackWidth - 24;
-        const auto genTitleLines = renderer.wrappedText(UI_12_FONT_ID, recentBooks[i].title.c_str(), genMaxWidth, 3);
+        const auto genLines = renderer.wrappedText(UI_12_FONT_ID, generatedText.c_str(), genMaxWidth, 4);
         const int genLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-        int genY = blackTop + 16;
-        for (const auto& line : genTitleLines) {
+        const int genTotalHeight = genLineHeight * static_cast<int>(genLines.size());
+        int genY = blackTop + (2 * tileHeight / 3 - genTotalHeight) / 2;
+        for (const auto& line : genLines) {
           const int lineWidth = renderer.getTextWidth(UI_12_FONT_ID, line.c_str());
           renderer.drawText(UI_12_FONT_ID, tileX + (tileWidth - lineWidth) / 2, genY, line.c_str(), false);
           genY += genLineHeight;
-        }
-        if (!recentBooks[i].author.empty()) {
-          const std::string subtitle = renderer.truncatedText(SMALL_FONT_ID, recentBooks[i].author.c_str(), genMaxWidth);
-          const int subtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, subtitle.c_str());
-          renderer.drawText(SMALL_FONT_ID, tileX + (tileWidth - subtitleWidth) / 2, genY + 6, subtitle.c_str(), false);
         }
       }
     }
