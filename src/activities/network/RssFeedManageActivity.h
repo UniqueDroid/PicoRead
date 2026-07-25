@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "../Activity.h"
 #include "util/ButtonNavigator.h"
 
@@ -10,6 +12,13 @@
 class RssFeedManageActivity final : public Activity {
   ButtonNavigator buttonNavigator;
   size_t selectorIndex = 0;
+
+  // Marquee-scrolls the selected feed row's title when it's too long to fit -
+  // same mechanism as RssFeedListActivity/RssArticleListActivity.
+  size_t scrollTitleOffset = 0;
+  unsigned long nextScrollStepMs = 0;
+  void resetScroll();
+  void stepScroll(const std::string& title);
 
   int itemCount() const;
   void deleteFeed(size_t feedIndex);

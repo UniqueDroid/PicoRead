@@ -34,6 +34,14 @@ class GutenbergActivity final : public Activity {
   bool shouldTearDownWifiOnExit = false;
   std::vector<GutenbergBook> popularBooks;  // in-memory only, loaded fresh each "Sync Now"
 
+  // Marquee-scrolls the selected row's title when it's too long to fit - same
+  // mechanism as the RSS lists.
+  size_t scrollTitleOffset = 0;
+  unsigned long nextScrollStepMs = 0;
+  void resetScroll();
+  void stepScroll(const std::string& title);
+  std::string contentLabelFor(int index) const;
+
   static constexpr int kPopularCount = GutenbergPaths::kPopularCount;
   static int contentItemCount() { return 1 + kPopularCount; }  // Random Book, Popular Book x N
   static int actionItemCount() { return 2; }  // Sync Now (loads the list, not the books), Manage Books

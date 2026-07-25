@@ -11,6 +11,20 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 
+namespace {
+// Matches the other Gutenberg/RSS list screens' bigger font - see
+// RssArticleListActivity for the full rationale. No marquee here: both labels
+// are short, fixed strings that always fit.
+void drawBigRow(const GfxRenderer& renderer, int pageWidth, int sidePadding, int rowY, int rowHeight,
+                const std::string& text, bool selected) {
+  if (selected) renderer.fillRect(0, rowY, pageWidth, rowHeight);
+  const int maxWidth = pageWidth - sidePadding * 2;
+  const std::string truncated = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
+  const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
+  renderer.drawText(UI_12_FONT_ID, sidePadding, textY, truncated.c_str(), !selected);
+}
+}  // namespace
+
 void GutenbergBookActionsActivity::onEnter() {
   Activity::onEnter();
   selectorIndex = 0;
@@ -77,21 +91,20 @@ void GutenbergBookActionsActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   const std::string headerTitle = bookTitle.empty() ? I18N.get(StrId::STR_GUTENBERG_RANDOM_BOOK) : bookTitle;
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, headerTitle.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
-  GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, 2, static_cast<int>(selectorIndex),
-      [](int index) -> std::string {
-        return index == 0 ? I18N.get(StrId::STR_GUTENBERG_MOVE_TO_LIBRARY) : I18N.get(StrId::STR_DELETE);
-      },
-      nullptr, [](int) { return UIIcon::None; });
+  const int bigRowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+  for (int i = 0; i < 2; i++) {
+    const std::string label = i == 0 ? I18N.get(StrId::STR_GUTENBERG_MOVE_TO_LIBRARY) : I18N.get(StrId::STR_DELETE);
+    const int rowY = contentTop + i * bigRowHeight;
+    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, label,
+              i == static_cast<int>(selectorIndex));
+  }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

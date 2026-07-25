@@ -1,9 +1,11 @@
 #include "GutenbergManageActivity.h"
 
+#include <Arduino.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <cstdio>
 
 #include "GutenbergBookActionsActivity.h"
@@ -12,6 +14,26 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+
+namespace {
+// Same pacing as the RSS lists - see RssArticleListActivity for why.
+constexpr unsigned long kScrollStepMs = 480;
+constexpr unsigned long kScrollPauseMs = 1200;
+
+void drawBigRow(const GfxRenderer& renderer, int pageWidth, int sidePadding, int rowY, int rowHeight,
+                const std::string& text, bool selected) {
+  if (selected) renderer.fillRect(0, rowY, pageWidth, rowHeight);
+  const int maxWidth = pageWidth - sidePadding * 2;
+  const std::string truncated = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
+  const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
+  renderer.drawText(UI_12_FONT_ID, sidePadding, textY, truncated.c_str(), !selected);
+}
+}  // namespace
+
+std::string GutenbergManageActivity::labelFor(int index) const {
+  if (index < bookCount()) return books[index].title;
+  return I18N.get(StrId::STR_GUTENBERG_CHANGE_LIBRARY_PATH);
+}
 
 void GutenbergManageActivity::loadBooks() {
   books.clear();
@@ -39,7 +61,38 @@ void GutenbergManageActivity::onEnter() {
   Activity::onEnter();
   selectorIndex = 0;
   loadBooks();
+  resetScroll();
   requestUpdate();
+}
+
+void GutenbergManageActivity::resetScroll() {
+  scrollTitleOffset = 0;
+  nextScrollStepMs = millis() + kScrollPauseMs;
+}
+
+void GutenbergManageActivity::stepScroll(const std::string& title) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
+  if (renderer.getTextWidth(UI_12_FONT_ID, title.c_str()) <= maxWidth) return;
+
+  const unsigned long now = millis();
+  if (now < nextScrollStepMs) return;
+
+  size_t fitLen = 0;
+  while (scrollTitleOffset + fitLen < title.size()) {
+    const std::string sub = title.substr(scrollTitleOffset, fitLen + 1);
+    if (renderer.getTextWidth(UI_12_FONT_ID, sub.c_str()) > maxWidth) break;
+    fitLen++;
+  }
+
+  if (scrollTitleOffset + fitLen >= title.size()) {
+    scrollTitleOffset = 0;
+    nextScrollStepMs = now + kScrollPauseMs;
+  } else {
+    scrollTitleOffset++;
+    nextScrollStepMs = now + kScrollStepMs;
+  }
+  requestUpdate(true);
 }
 
 void GutenbergManageActivity::startChangeLibraryPathFlow() {
@@ -72,6 +125,7 @@ void GutenbergManageActivity::loop() {
           [this](const ActivityResult&) {
             loadBooks();
             if (selectorIndex > 0 && static_cast<int>(selectorIndex) >= itemCount()) selectorIndex--;
+            resetScroll();
             requestUpdate();
           });
     } else {
@@ -82,12 +136,16 @@ void GutenbergManageActivity::loop() {
 
   buttonNavigator.onNextRelease([this, count] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), count);
+    resetScroll();
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this, count] {
     selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), count);
+    resetScroll();
     requestUpdate();
   });
+
+  stepScroll(labelFor(static_cast<int>(selectorIndex)));
 }
 
 void GutenbergManageActivity::render(RenderLock&&) {
@@ -103,15 +161,19 @@ void GutenbergManageActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int count = itemCount();
-  const int books_ = bookCount();
 
-  GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, count, static_cast<int>(selectorIndex),
-      [this, books_](int index) -> std::string {
-        if (index < books_) return books[index].title;
-        return I18N.get(StrId::STR_GUTENBERG_CHANGE_LIBRARY_PATH);
-      },
-      nullptr, [](int) { return UIIcon::None; });
+  const int bigRowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+  const int pageItems = std::max(1, contentHeight / bigRowHeight);
+  const int pageStart = static_cast<int>(selectorIndex) / pageItems * pageItems;
+  for (int i = pageStart; i < count && i < pageStart + pageItems; i++) {
+    const int rowY = contentTop + (i - pageStart) * bigRowHeight;
+    const bool selected = i == static_cast<int>(selectorIndex);
+    const std::string fullTitle = labelFor(i);
+    const std::string text = (selected && scrollTitleOffset > 0 && scrollTitleOffset < fullTitle.size())
+                                 ? fullTitle.substr(scrollTitleOffset)
+                                 : fullTitle;
+    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
+  }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
