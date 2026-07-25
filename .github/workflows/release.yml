@@ -38,6 +38,13 @@ jobs:
       - name: Build PicoRead
         run: pio run -e gh_release
 
+      - name: Prepare update.bin for the OEM bootloader's SD recovery flow
+        # The stock Xteink/CrossPoint bootloader can flash an app image straight
+        # from the SD card root (hold Power+Up at boot) if it's named exactly
+        # "update.bin" - same app-partition image format as firmware.bin, just a
+        # renamed copy so it's discoverable that way too, no USB/computer needed.
+        run: cp .pio/build/gh_release/firmware.bin .pio/build/gh_release/update.bin
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -47,11 +54,13 @@ jobs:
           # - bootloader.bin/partitions.bin/firmware.bin together are what
           #   unique-esp-web-flasher mirrors from /releases/latest/download/... - stable
           #   names mean its manifest never needs editing for a new release.
+          # - update.bin is firmware.bin under the OEM bootloader's expected filename.
           files: |
             .pio/build/gh_release/bootloader.bin
             .pio/build/gh_release/firmware.bin
             .pio/build/gh_release/firmware.elf
             .pio/build/gh_release/firmware.map
             .pio/build/gh_release/partitions.bin
+            .pio/build/gh_release/update.bin
           generate_release_notes: true
           fail_on_unmatched_files: true

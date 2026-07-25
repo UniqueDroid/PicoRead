@@ -20,9 +20,11 @@ On top of that, this fork so far adds:
 - **PicoRead theme** — a new default theme with a 2-column tile home screen and a 3-cover "Continue Reading" strip up top, alongside the existing Classic/Lyra/RoundedRaff themes (pick any of them in Settings > Display).
 - **Reading Statistics** — a home-screen tile with per-book stats (sessions, reading time, pages turned, average session length, pages/minute) plus an "All Books" aggregate card.
 - **RSS Reader** — subscribe to feeds, sync them over Wi-Fi, and read articles fully offline afterwards. See [RSS Reader](#rss-reader) below.
-- **Wikipedia** — today's featured article, an on-this-day digest, and a random article, synced with one tap and read fully offline afterward. See [Wikipedia](#wikipedia) below.
+- **Wikipedia** — today's featured article, an on-this-day digest, and five random articles, synced with one tap and read fully offline afterward. See [Wikipedia](#wikipedia) below.
+- **Gutenberg** — a random pick plus the current top-5 most-downloaded public-domain books from Project Gutenberg, downloaded as real EPUBs. See [Gutenberg](#gutenberg) below.
 - **Restart / Shut Down** — both are now one tap away in Settings > System instead of requiring a button-combo or waiting out the sleep timer.
 - **Flappy** — a slow-tick, e-ink-appropriate take on Flappy Bird for killing 5 minutes between chapters. Home screen tile, one button to flap.
+- **Larger UI font** — Settings > System > "Larger UI Font" bumps the text in lists, headers, and popups app-wide (on by default) — off reverts to the original, more compact sizing.
 
 More to come as I find time. See [Credits](#credits) for the full attribution.
 
@@ -43,6 +45,14 @@ If flashing fails and you suspect a lock, first try the web installer below with
 **Already on a PicoRead build?** Skip USB entirely — open **File Transfer** on the device, go to **Firmware Update** in the web menu (or use **Settings > Check for Updates** on-device), and it'll check this repo's latest release, verify the SHA256 checksum, and flash with a progress bar.
 
 **Prefer the generic flasher?** Grab a `firmware.bin` from [Releases](https://github.com/UniqueDroid/PicoRead/releases) (or build your own), head to https://crosspointreader.com/#flash-tools, and use its "Custom .bin" option — PicoRead isn't in that tool's own release list, but any compatible `.bin` works.
+
+**No computer at all? The OEM bootloader can flash from the SD card:**
+
+1. Download [`update.bin`](https://github.com/UniqueDroid/PicoRead/releases/latest/download/update.bin) and copy it to the SD card's root folder.
+2. Plug the USB cable into power only (no computer needed), then hold **Power + Up** (the top-left button on X3) while powering on.
+3. The OEM bootloader flashes PicoRead straight from the SD card.
+
+This is the same recovery mechanism resellers ship for locked units (see [USB-locked devices](#usb-locked-devices) above) - `update.bin` is just `firmware.bin` under the filename that bootloader looks for.
 
 **Command line**, if you'd rather script it:
 
@@ -109,6 +119,24 @@ The Wikipedia tile on the home screen fetches content from Wikipedia's own REST 
 - **Random Article 1-5** — five random articles, each its own entry.
 
 None of these fetch on their own when selected — tap **Sync Now** (below a divider, like the RSS reader's action row) to download everything and save it to the SD card, then read it fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home. Files live under `.picoread/wikipedia/` and are overwritten on each sync — no history is kept.
+
+---
+
+## Gutenberg
+
+The Gutenberg tile on the home screen browses public-domain books via [Gutendex](https://gutendex.com), a JSON index over Project Gutenberg:
+
+- **Random Book** — a random pick from the catalog, freshly chosen every time you select it.
+- **Popular Book 1-5** — the current top-5 most-downloaded books.
+
+Unlike Wikipedia's "sync everything at once" model, **Sync Now** only fetches the popular list's *metadata* (titles + EPUB links, one small request) — selecting an entry downloads just that one book's real EPUB (proper chapters and table of contents, not a plain-text dump), once, and reuses the saved copy after that. Random Book always re-downloads fresh.
+
+**Manage Books** lists everything you've downloaded, with two actions per book:
+
+- **Move to Library** — relocates the file into your own library folder (`/ebooks` by default, editable via **Change Library Folder** in the same screen) under a name based on the book's title, so it shows up as a permanent book instead of living in Gutenberg's cache.
+- **Delete** — removes the downloaded file.
+
+Files live under `.picoread/gutenberg/`.
 
 ---
 
