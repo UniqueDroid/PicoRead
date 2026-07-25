@@ -81,7 +81,8 @@ void TxtReaderActivity::onEnter() {
   // Save current txt as last opened file and add to recent books
   auto filePath = txt->getPath();
   const bool fromRssForTitle = isRssArticle(filePath);
-  std::string displayTitle = fromRssForTitle ? readFirstLine(filePath) : std::string();
+  const bool fromWikipediaForTitle = isWikipediaArticle(filePath);
+  std::string displayTitle = (fromRssForTitle || fromWikipediaForTitle) ? readFirstLine(filePath) : std::string();
   if (displayTitle.empty()) {
     displayTitle = filePath.substr(filePath.rfind('/') + 1);
   }
