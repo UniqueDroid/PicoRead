@@ -12,6 +12,7 @@
 
 #include "network/HttpDownloader.h"
 #include "MappedInputManager.h"
+#include "RssArticleListActivity.h"
 #include "RssFeedManageActivity.h"
 #include "RssFeedStore.h"
 #include "activities/network/WifiSelectionActivity.h"
@@ -146,6 +147,13 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   const std::string dir = RssFeedStore::articleDirFor(feedIndex);
   Storage.mkdir(dir.c_str(), true);
 
+  // One title per line, written alongside each article rather than assembled in
+  // RAM first (same streaming reasoning as the articles themselves) - lets
+  // RssArticleListActivity show every article's title without opening all of
+  // them just to read the first line.
+  HalFile indexFile;
+  Storage.openFileForWrite("RSS", dir + "/index.txt", indexFile);
+
   // Articles are written to SD as soon as each one finishes parsing, instead of
   // collecting them into feedData.articles first - some feeds run to dozens of
   // full-length posts, which doesn't fit in this device's heap if held all at
@@ -153,7 +161,7 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   // place). See RssParser.h.
   size_t articleIndex = 0;
   RssParser parser;
-  parser.setArticleHandler([&dir, &articleIndex](const RssArticle& article) {
+  parser.setArticleHandler([&dir, &articleIndex, &indexFile](const RssArticle& article) {
     const std::string path = dir + "/" + std::to_string(articleIndex) + ".txt";
     articleIndex++;
     HalFile file;
@@ -165,6 +173,14 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
       file.write(reinterpret_cast<const uint8_t*>("\n\n"), 2);
     }
     file.write(reinterpret_cast<const uint8_t*>(article.description.data()), article.description.size());
+
+    // A title with an embedded newline (rare, but some feeds' CDATA titles span
+    // lines) would otherwise desync the index's line count from the actual
+    // number of article files - flatten to one line.
+    std::string indexTitle = article.title.empty() ? "?" : article.title;
+    std::replace(indexTitle.begin(), indexTitle.end(), '\n', ' ');
+    indexFile.write(reinterpret_cast<const uint8_t*>(indexTitle.data()), indexTitle.size());
+    indexFile.write(reinterpret_cast<const uint8_t*>("\n"), 1);
   });
 
   const bool fetchOk = HttpDownloader::fetchUrl(
@@ -217,10 +233,9 @@ void RssFeedListActivity::startManageFeedsFlow() {
 }
 
 void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
-  // Straight into the first article - no folder listing detour. Article file
-  // names are plain indices (0.txt, 1.txt, ...) not meant for manual browsing;
-  // TxtReaderActivity's own paging (see NextBookFinder) moves between them, and
-  // Back from inside an article returns here rather than to a file browser.
+  // Shows every synced article's title (RssArticleListActivity) instead of
+  // jumping straight into the first one - some feeds run to dozens of articles
+  // per sync, and picking a specific one beats paging through from the start.
   const std::string firstArticle = RssFeedStore::articleDirFor(feedIndex) + "/0.txt";
   if (!Storage.exists(firstArticle.c_str())) {
     // Not synced yet (e.g. just imported from SD): offer to sync right away
@@ -237,7 +252,8 @@ void RssFeedListActivity::onSelectFeed(size_t feedIndex) {
         });
     return;
   }
-  activityManager.goToReader(firstArticle);
+  startActivityForResult(std::make_unique<RssArticleListActivity>(renderer, mappedInput, feedIndex),
+                         [this](const ActivityResult&) { requestUpdate(); });
 }
 
 void RssFeedListActivity::loop() {
