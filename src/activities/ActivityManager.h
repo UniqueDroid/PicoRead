@@ -26,6 +26,7 @@ enum class HomeMenuItem {
   STATS,
   RSS_FEEDS,
   WIKIPEDIA,
+  GUTENBERG,
   OPDS_BROWSER,
   FILE_TRANSFER,
   SETTINGS_MENU
@@ -102,6 +103,7 @@ class ActivityManager {
   void goToFlappyGame();
   void goToRssFeeds();
   void goToWikipedia();
+  void goToGutenberg();
   void goToBrowser();
   void goToReader(std::string path);
   void goToSleep(bool fromTimeout = false);

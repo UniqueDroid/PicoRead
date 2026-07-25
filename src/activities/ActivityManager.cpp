@@ -16,6 +16,7 @@
 #include "home/HomeActivity.h"
 #include "home/ReadingStatsActivity.h"
 #include "home/RecentBooksActivity.h"
+#include "network/GutenbergActivity.h"
 #include "network/PicoReadWebServerActivity.h"
 #include "network/RssFeedListActivity.h"
 #include "network/WikipediaActivity.h"
@@ -210,6 +211,10 @@ void ActivityManager::goToWikipedia() {
   replaceActivity(std::make_unique<WikipediaActivity>(renderer, mappedInput));
 }
 
+void ActivityManager::goToGutenberg() {
+  replaceActivity(std::make_unique<GutenbergActivity>(renderer, mappedInput));
+}
+
 void ActivityManager::goToBrowser() {
   const auto& servers = OPDS_STORE.getServers();
   // Skip the server picker when there's only one server configured
@@ -252,6 +257,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::RSS_FEEDS;
     } else if (activityName == "Wikipedia") {
       initialMenuItem = HomeMenuItem::WIKIPEDIA;
+    } else if (activityName == "Gutenberg") {
+      initialMenuItem = HomeMenuItem::GUTENBERG;
     } else if (activityName == "OpdsBookBrowser") {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
     } else if (activityName == "PicoReadWebServer") {
