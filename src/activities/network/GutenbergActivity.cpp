@@ -10,42 +10,15 @@
 #include <cstdio>
 
 #include "network/HttpDownloader.h"
+#include "GutenbergManageActivity.h"
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
-namespace {
-constexpr const char* kGutenbergDir = "/.picoread/gutenberg";
-constexpr const char* kRandomBookPath = "/.picoread/gutenberg/random.epub";
-constexpr const char* kListPath = "/.picoread/gutenberg/list.txt";
-
-std::string popularBookPath(int index) {
-  char buf[48];
-  snprintf(buf, sizeof(buf), "/.picoread/gutenberg/popular%d.epub", index);
-  return buf;
-}
-
-bool writeTextFile(const std::string& path, const std::string& content) {
-  HalFile file;
-  if (!Storage.openFileForWrite("GUTB", path, file)) return false;
-  file.write(reinterpret_cast<const uint8_t*>(content.data()), content.size());
-  return true;
-}
-
-std::string readTextFile(const std::string& path) {
-  HalFile file;
-  if (!Storage.openFileForRead("GUTB", path, file)) return "";
-  std::string content;
-  char buf[256];
-  size_t n;
-  while ((n = file.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf))) > 0) {
-    content.append(buf, n);
-  }
-  return content;
-}
-}  // namespace
+using GutenbergPaths::popularBookPath;
+using GutenbergPaths::writeTextFile;
 
 void GutenbergActivity::onEnter() {
   Activity::onEnter();
@@ -55,20 +28,7 @@ void GutenbergActivity::onEnter() {
   // The list (titles + EPUB URLs) is small enough to just keep on SD - avoids
   // re-fetching every time the tile is revisited, unlike the actual EPUBs which
   // are only ever fetched on selection (see class comment in the header).
-  popularBooks.clear();
-  const std::string raw = readTextFile(kListPath);
-  size_t start = 0;
-  while (popularBooks.size() < static_cast<size_t>(kPopularCount) && start < raw.size()) {
-    const size_t titleEnd = raw.find('\n', start);
-    if (titleEnd == std::string::npos) break;
-    const size_t urlEnd = raw.find('\n', titleEnd + 1);
-    if (urlEnd == std::string::npos) break;
-    GutenbergBook book;
-    book.title = raw.substr(start, titleEnd - start);
-    book.epubUrl = raw.substr(titleEnd + 1, urlEnd - titleEnd - 1);
-    if (!book.title.empty()) popularBooks.push_back(book);
-    start = urlEnd + 1;
-  }
+  popularBooks = GutenbergPaths::loadPopularBooksFromDisk();
 
   requestUpdate();
 }
@@ -118,8 +78,8 @@ void GutenbergActivity::loadPopularList() {
     for (const auto& book : popularBooks) {
       listContent += book.title + "\n" + book.epubUrl + "\n";
     }
-    Storage.mkdir(kGutenbergDir, true);
-    writeTextFile(kListPath, listContent);
+    Storage.mkdir(GutenbergPaths::kDir, true);
+    writeTextFile(GutenbergPaths::kListPath, listContent);
   } else {
     LOG_ERR("GUTB", "Popular books list fetch failed");
   }
@@ -149,10 +109,10 @@ void GutenbergActivity::openRandomBook() {
 
     bool ok = false;
     if (fetchOk && !parser.getBooks().empty() && !parser.getBooks()[0].epubUrl.empty()) {
-      Storage.mkdir(kGutenbergDir, true);
+      Storage.mkdir(GutenbergPaths::kDir, true);
       busyProgressPercent = 0;
       ok = HttpDownloader::downloadToFile(
-               parser.getBooks()[0].epubUrl, kRandomBookPath,
+               parser.getBooks()[0].epubUrl, GutenbergPaths::kRandomBookPath,
                [this](size_t downloaded, size_t total) {
                  busyProgressPercent = total > 0 ? static_cast<int>(downloaded * 100 / total) : 0;
                  requestUpdate(true);
@@ -163,7 +123,7 @@ void GutenbergActivity::openRandomBook() {
 
     busyProgressPercent = -1;
     if (ok) {
-      activityManager.goToReader(kRandomBookPath);
+      activityManager.goToReader(GutenbergPaths::kRandomBookPath);
     } else {
       state = State::List;
       requestUpdate();
@@ -189,7 +149,7 @@ void GutenbergActivity::openPopularBook(int index) {
     busyMessage = tr(STR_LOADING);
     requestUpdateAndWait();
 
-    Storage.mkdir(kGutenbergDir, true);
+    Storage.mkdir(GutenbergPaths::kDir, true);
     busyProgressPercent = 0;
     const bool ok = !url.empty() && HttpDownloader::downloadToFile(
                                         url, path,
@@ -237,8 +197,11 @@ void GutenbergActivity::loop() {
       openRandomBook();
     } else if (static_cast<int>(selectorIndex) < contentCount) {
       openPopularBook(static_cast<int>(selectorIndex) - 1);
-    } else {
+    } else if (static_cast<int>(selectorIndex) == contentCount) {
       ensureWifiThen([this] { loadPopularList(); });
+    } else {
+      startActivityForResult(std::make_unique<GutenbergManageActivity>(renderer, mappedInput),
+                             [this](const ActivityResult&) { requestUpdate(); });
     }
     return;
   }
@@ -299,8 +262,10 @@ void GutenbergActivity::render(RenderLock&&) {
   GUI.drawList(
       renderer, Rect{0, actionsTop, pageWidth, actionsHeight}, actionItemCount(),
       contentFocused ? -1 : static_cast<int>(selectorIndex) - contentCount,
-      [](int) -> std::string { return I18N.get(StrId::STR_RSS_SYNC_NOW); }, nullptr,
-      [](int) { return UIIcon::None; });
+      [](int index) -> std::string {
+        return index == 0 ? I18N.get(StrId::STR_RSS_SYNC_NOW) : I18N.get(StrId::STR_GUTENBERG_MANAGE_BOOKS);
+      },
+      nullptr, [](int) { return UIIcon::None; });
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

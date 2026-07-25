@@ -137,6 +137,12 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   const auto& feeds = RSS_STORE.getFeeds();
   if (feedIndex >= feeds.size()) return false;
 
+  // Logged per-feed (not just once for the whole sync) so a crash report's
+  // "Last logs" tail shows the heap trend leading up to whichever feed it died
+  // on - repeated field reports of aborts mid-sync haven't pointed to a single
+  // clear cause from the (unreliable, non-DWARF) stack dump alone.
+  LOG_DBG("RSS", "Free heap before %s: %u bytes", feeds[feedIndex].url.c_str(), ESP.getFreeHeap());
+
   const std::string dir = RssFeedStore::articleDirFor(feedIndex);
   Storage.mkdir(dir.c_str(), true);
 

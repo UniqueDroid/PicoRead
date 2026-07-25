@@ -5,6 +5,7 @@
 
 #include "../Activity.h"
 #include "GutenbergJsonParser.h"
+#include "GutenbergPaths.h"
 #include "util/ButtonNavigator.h"
 
 // Home-screen "Gutenberg" tile: browses a fixed handful of public-domain books via
@@ -33,9 +34,9 @@ class GutenbergActivity final : public Activity {
   bool shouldTearDownWifiOnExit = false;
   std::vector<GutenbergBook> popularBooks;  // in-memory only, loaded fresh each "Sync Now"
 
-  static constexpr int kPopularCount = 5;
+  static constexpr int kPopularCount = GutenbergPaths::kPopularCount;
   static int contentItemCount() { return 1 + kPopularCount; }  // Random Book, Popular Book x N
-  static int actionItemCount() { return 1; }                   // Sync Now (loads the list, not the books)
+  static int actionItemCount() { return 2; }  // Sync Now (loads the list, not the books), Manage Books
   static int itemCount() { return contentItemCount() + actionItemCount(); }
 
   void ensureWifiThen(const std::function<void()>& action);
