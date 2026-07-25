@@ -69,6 +69,16 @@ bool isInReadFolder(const std::string& path) {
   return path.size() > n && path.compare(0, n, READ_FOLDER) == 0 && path[n] == '/';
 }
 
+// Downloaded via the Gutenberg tile (see GutenbergPaths.h) - Back should return
+// there instead of Home/file browser, same reasoning as RSS/Wikipedia articles
+// in TxtReaderActivity: it's an auto-managed cache folder, not somewhere a user
+// browses manually.
+constexpr char GUTENBERG_DIR_PREFIX[] = "/.picoread/gutenberg/";
+bool isGutenbergBook(const std::string& path) {
+  constexpr size_t n = sizeof(GUTENBERG_DIR_PREFIX) - 1;
+  return path.compare(0, n, GUTENBERG_DIR_PREFIX) == 0;
+}
+
 struct ProgressRange {
   float start;
   float end;
@@ -468,20 +478,33 @@ void EpubReaderActivity::loop() {
     }
   }
 
-  // Long press BACK (1s+) goes to file selection
+  const bool fromGutenberg = epub && isGutenbergBook(epub->getPath());
+
+  // Long press BACK (1s+) goes to file selection - or, for a Gutenberg
+  // download, back to the Gutenberg overview (its folder is an auto-managed
+  // cache, not meant for manual browsing).
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
-    activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+    if (fromGutenberg) {
+      activityManager.goToGutenberg();
+    } else {
+      activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+    }
     return;
   }
 
-  // Short press BACK goes directly to home (or restores position if viewing footnote)
+  // Short press BACK goes directly to home (or restores position if viewing
+  // footnote, or the Gutenberg overview for a Gutenberg download)
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
     if (footnoteDepth > 0) {
       restoreSavedPosition();
       return;
     }
-    onGoHome();
+    if (fromGutenberg) {
+      activityManager.goToGutenberg();
+    } else {
+      onGoHome();
+    }
     return;
   }
 
