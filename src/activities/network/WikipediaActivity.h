@@ -22,6 +22,13 @@ class WikipediaActivity final : public Activity {
   int busyProgressPercent = -1;  // -1 = no progress bar, just the message
   bool shouldTearDownWifiOnExit = false;
 
+  // Marquee-scrolls the selected row's title when it's too long to fit - same
+  // mechanism as the RSS/Gutenberg lists.
+  size_t scrollTitleOffset = 0;
+  unsigned long nextScrollStepMs = 0;
+  void resetScroll();
+  void stepScroll(const std::string& title);
+
   static constexpr int kRandomCount = 5;
   static int contentItemCount() { return 2 + kRandomCount; }  // Article of Day, On This Day, Random x N
   static int actionItemCount() { return 1; }                  // Sync Now
@@ -35,6 +42,7 @@ class WikipediaActivity final : public Activity {
   void openTextOrPromptSync(const std::string& path);
   void promptSync();
   void openContentEntry(int index);
+  std::string contentLabelFor(int index) const;
 
  public:
   explicit WikipediaActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

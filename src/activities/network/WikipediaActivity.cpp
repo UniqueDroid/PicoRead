@@ -69,6 +69,19 @@ bool getTodayDate(uint16_t& year, uint8_t& month, uint8_t& day) {
   return false;
 }
 
+// Same pacing as the RSS/Gutenberg lists - see RssArticleListActivity for why.
+constexpr unsigned long kScrollStepMs = 480;
+constexpr unsigned long kScrollPauseMs = 1200;
+
+void drawBigRow(const GfxRenderer& renderer, int pageWidth, int sidePadding, int rowY, int rowHeight,
+                const std::string& text, bool selected) {
+  if (selected) renderer.fillRect(0, rowY, pageWidth, rowHeight);
+  const int maxWidth = pageWidth - sidePadding * 2;
+  const std::string truncated = renderer.truncatedText(UI_12_FONT_ID, text.c_str(), maxWidth);
+  const int textY = rowY + (rowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
+  renderer.drawText(UI_12_FONT_ID, sidePadding, textY, truncated.c_str(), !selected);
+}
+
 bool writeTextFile(const std::string& path, const std::string& content) {
   HalFile file;
   if (!Storage.openFileForWrite("WIKI", path, file)) return false;
@@ -81,7 +94,38 @@ void WikipediaActivity::onEnter() {
   Activity::onEnter();
   state = State::List;
   selectorIndex = 0;
+  resetScroll();
   requestUpdate();
+}
+
+void WikipediaActivity::resetScroll() {
+  scrollTitleOffset = 0;
+  nextScrollStepMs = millis() + kScrollPauseMs;
+}
+
+void WikipediaActivity::stepScroll(const std::string& title) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int maxWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2;
+  if (renderer.getTextWidth(UI_12_FONT_ID, title.c_str()) <= maxWidth) return;
+
+  const unsigned long now = millis();
+  if (now < nextScrollStepMs) return;
+
+  size_t fitLen = 0;
+  while (scrollTitleOffset + fitLen < title.size()) {
+    const std::string sub = title.substr(scrollTitleOffset, fitLen + 1);
+    if (renderer.getTextWidth(UI_12_FONT_ID, sub.c_str()) > maxWidth) break;
+    fitLen++;
+  }
+
+  if (scrollTitleOffset + fitLen >= title.size()) {
+    scrollTitleOffset = 0;
+    nextScrollStepMs = now + kScrollPauseMs;
+  } else {
+    scrollTitleOffset++;
+    nextScrollStepMs = now + kScrollStepMs;
+  }
+  requestUpdate(true);
 }
 
 void WikipediaActivity::onExit() {
@@ -266,6 +310,14 @@ void WikipediaActivity::openContentEntry(int index) {
   }
 }
 
+std::string WikipediaActivity::contentLabelFor(int index) const {
+  if (index == 0) return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
+  if (index == 1) return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
+  char buf[48];
+  snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index - 1);
+  return buf;
+}
+
 void WikipediaActivity::loop() {
   if (state != State::List) return;
 
@@ -288,12 +340,18 @@ void WikipediaActivity::loop() {
 
   buttonNavigator.onNextRelease([this, count] {
     selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), count);
+    resetScroll();
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this, count] {
     selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), count);
+    resetScroll();
     requestUpdate();
   });
+
+  if (static_cast<int>(selectorIndex) < contentCount) {
+    stepScroll(contentLabelFor(static_cast<int>(selectorIndex)));
+  }
 }
 
 void WikipediaActivity::render(RenderLock&&) {
@@ -315,36 +373,34 @@ void WikipediaActivity::render(RenderLock&&) {
   const int contentBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int contentCount = contentItemCount();
 
-  const int actionsHeight = actionItemCount() * metrics.listRowHeight;
+  const int bigRowHeight = renderer.getLineHeight(UI_12_FONT_ID) + 16;
+  const int actionsHeight = actionItemCount() * bigRowHeight;
   const int separatorGap = metrics.verticalSpacing;
-  const int contentRegionHeight =
-      std::max(metrics.listRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
+  const int contentRegionHeight = std::max(bigRowHeight, contentBottom - contentTop - separatorGap - actionsHeight);
 
   const bool contentFocused = static_cast<int>(selectorIndex) < contentCount;
 
   // Content region: Article of the Day, On This Day, then N random articles -
   // labelled "Random Article N" (1-indexed) since there's more than one now.
-  GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentRegionHeight}, contentCount,
-      contentFocused ? static_cast<int>(selectorIndex) : -1,
-      [](int index) -> std::string {
-        if (index == 0) return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
-        if (index == 1) return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
-        char buf[48];
-        snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index - 1);
-        return buf;
-      },
-      nullptr, [](int) { return UIIcon::None; });
+  const int contentPageItems = std::max(1, contentRegionHeight / bigRowHeight);
+  const int contentPageStart =
+      contentFocused ? static_cast<int>(selectorIndex) / contentPageItems * contentPageItems : 0;
+  for (int i = contentPageStart; i < contentCount && i < contentPageStart + contentPageItems; i++) {
+    const int rowY = contentTop + (i - contentPageStart) * bigRowHeight;
+    const bool selected = contentFocused && i == static_cast<int>(selectorIndex);
+    const std::string fullTitle = contentLabelFor(i);
+    const std::string text = (selected && scrollTitleOffset > 0 && scrollTitleOffset < fullTitle.size())
+                                 ? fullTitle.substr(scrollTitleOffset)
+                                 : fullTitle;
+    drawBigRow(renderer, pageWidth, metrics.contentSidePadding, rowY, bigRowHeight, text, selected);
+  }
 
   const int separatorY = contentTop + contentRegionHeight + separatorGap / 2;
   renderer.drawLine(0, separatorY, pageWidth, separatorY);
 
   const int actionsTop = contentTop + contentRegionHeight + separatorGap;
-  GUI.drawList(
-      renderer, Rect{0, actionsTop, pageWidth, actionsHeight}, actionItemCount(),
-      contentFocused ? -1 : static_cast<int>(selectorIndex) - contentCount,
-      [](int) -> std::string { return I18N.get(StrId::STR_RSS_SYNC_NOW); }, nullptr,
-      [](int) { return UIIcon::None; });
+  drawBigRow(renderer, pageWidth, metrics.contentSidePadding, actionsTop, bigRowHeight,
+            I18N.get(StrId::STR_RSS_SYNC_NOW), !contentFocused);
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
