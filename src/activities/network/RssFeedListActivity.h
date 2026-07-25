@@ -23,6 +23,13 @@ class RssFeedListActivity final : public Activity {
   int busyProgressPercent = -1;  // -1 = no progress bar, just the message
   bool shouldTearDownWifiOnExit = false;
 
+  // Marquee-scrolls the selected feed row's title when it's too long to fit -
+  // same mechanism as RssArticleListActivity, see there for the pacing notes.
+  size_t scrollTitleOffset = 0;
+  unsigned long nextScrollStepMs = 0;
+  void resetScroll();
+  void stepScroll(const std::string& title);
+
   // 1 when there are no feeds yet (a non-actionable placeholder row), else one row
   // per feed.
   int feedRegionCount() const;

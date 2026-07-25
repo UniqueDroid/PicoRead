@@ -31,8 +31,8 @@ std::string readFirstLine(const std::string& path) {
 // other activities' "Time = ... ms from clearScreen to displayBuffer" logs),
 // so the step interval stays comfortably above that to avoid stacking update
 // requests - with a visible pause at both ends of the scroll.
-constexpr unsigned long kScrollStepMs = 600;
-constexpr unsigned long kScrollPauseMs = 1500;
+constexpr unsigned long kScrollStepMs = 480;
+constexpr unsigned long kScrollPauseMs = 1200;
 }  // namespace
 
 void RssArticleListActivity::loadTitles() {
