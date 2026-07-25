@@ -140,9 +140,14 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
 
   // Logged per-feed (not just once for the whole sync) so a crash report's
   // "Last logs" tail shows the heap trend leading up to whichever feed it died
-  // on - repeated field reports of aborts mid-sync haven't pointed to a single
-  // clear cause from the (unreliable, non-DWARF) stack dump alone.
-  LOG_DBG("RSS", "Free heap before %s: %u bytes", feeds[feedIndex].url.c_str(), ESP.getFreeHeap());
+  // on. Total free heap alone wasn't the story in the last field crash (83KB
+  // free, plenty) - the panic PC symbolized to a std::string reallocation
+  // inside expat's CDATA handling, which points at fragmentation rather than
+  // exhaustion, so MaxAlloc (largest contiguous free block, same field
+  // main.cpp already logs at boot) is logged too: a big gap between Free and
+  // MaxAlloc would confirm it.
+  LOG_DBG("RSS", "Heap before %s: free=%u maxAlloc=%u bytes", feeds[feedIndex].url.c_str(), ESP.getFreeHeap(),
+         ESP.getMaxAllocHeap());
 
   const std::string dir = RssFeedStore::articleDirFor(feedIndex);
   // Clear out anything from a previous sync first: articles are written as
