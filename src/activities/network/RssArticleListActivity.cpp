@@ -41,6 +41,10 @@ void RssArticleListActivity::loadTitles() {
     while ((n = indexFile.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf))) > 0) {
       content.append(buf, n);
     }
+    // Exact line count (cheap - the whole index is already in memory) beats a
+    // rough estimate and avoids any vector growth-copy cycles below.
+    titles.reserve(static_cast<size_t>(std::count(content.begin(), content.end(), '\n')) + 1);
+
     size_t start = 0;
     while (start < content.size()) {
       const size_t nl = content.find('\n', start);
@@ -55,6 +59,7 @@ void RssArticleListActivity::loadTitles() {
 
   // No index.txt (feed synced before this existed) - fall back to reading each
   // article's own first line, same as Recents does for RSS-sourced entries.
+  titles.reserve(200);
   for (int i = 0; i < 200; i++) {
     const std::string path = dir + "/" + std::to_string(i) + ".txt";
     if (!Storage.exists(path.c_str())) break;

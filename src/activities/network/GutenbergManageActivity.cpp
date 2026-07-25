@@ -22,6 +22,7 @@ std::string GutenbergManageActivity::labelFor(int index) const {
 
 void GutenbergManageActivity::loadBooks() {
   books.clear();
+  books.reserve(1 + GutenbergPaths::kPopularCount);  // Random Book + up to kPopularCount
 
   if (Storage.exists(GutenbergPaths::kRandomBookPath)) {
     books.push_back({GutenbergPaths::kRandomBookPath, I18N.get(StrId::STR_GUTENBERG_RANDOM_BOOK)});
