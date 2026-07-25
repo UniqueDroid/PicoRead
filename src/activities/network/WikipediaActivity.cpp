@@ -5,7 +5,6 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
-#include <WiFi.h>
 #include <esp_sntp.h>
 #include <time.h>
 
@@ -15,7 +14,6 @@
 #include "network/HttpDownloader.h"
 #include "MappedInputManager.h"
 #include "WikipediaJsonParser.h"
-#include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -83,29 +81,6 @@ void WikipediaActivity::onEnter() {
   selectorIndex = 0;
   scroller.reset();
   requestUpdate();
-}
-
-void WikipediaActivity::onExit() {
-  Activity::onExit();
-  if (shouldTearDownWifiOnExit && WiFi.getMode() != WIFI_MODE_NULL) {
-    WiFi.disconnect(false);
-  }
-}
-
-void WikipediaActivity::ensureWifiThen(const std::function<void()>& action) {
-  if (WiFi.status() == WL_CONNECTED) {
-    action();
-    return;
-  }
-  shouldTearDownWifiOnExit = true;
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
-                         [this, action](const ActivityResult& result) {
-                           if (!result.isCancelled) {
-                             action();
-                           } else {
-                             requestUpdate();
-                           }
-                         });
 }
 
 bool WikipediaActivity::downloadArticleOfDay() {

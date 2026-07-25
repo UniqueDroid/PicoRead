@@ -1,8 +1,7 @@
 #pragma once
-#include <functional>
 #include <string>
 
-#include "../Activity.h"
+#include "NetworkActivity.h"
 #include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
@@ -13,7 +12,7 @@
 // it does not re-fetch. Uses the system's configured UI language to pick the
 // Wikipedia edition. Layout mirrors RssFeedListActivity: content entries in
 // one region, a divider, then Sync Now below as its own action row.
-class WikipediaActivity final : public Activity {
+class WikipediaActivity final : public NetworkActivity {
   enum class State { List, Busy };
 
   ButtonNavigator buttonNavigator;
@@ -21,7 +20,6 @@ class WikipediaActivity final : public Activity {
   State state = State::List;
   std::string busyMessage;
   int busyProgressPercent = -1;  // -1 = no progress bar, just the message
-  bool shouldTearDownWifiOnExit = false;
 
   // Marquee-scrolls the selected row's title when it's too long to fit - same
   // shared mechanism as the RSS/Gutenberg lists, see ScrollingListRow.h.
@@ -32,7 +30,6 @@ class WikipediaActivity final : public Activity {
   static int actionItemCount() { return 1; }                  // Sync Now
   static int itemCount() { return contentItemCount() + actionItemCount(); }
 
-  void ensureWifiThen(const std::function<void()>& action);
   bool downloadArticleOfDay();
   bool downloadOnThisDay();
   bool downloadRandomArticle(int index);
@@ -44,9 +41,8 @@ class WikipediaActivity final : public Activity {
 
  public:
   explicit WikipediaActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity("Wikipedia", renderer, mappedInput) {}
+      : NetworkActivity("Wikipedia", renderer, mappedInput) {}
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
 };

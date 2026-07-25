@@ -4,7 +4,6 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
-#include <WiFi.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -12,7 +11,6 @@
 #include "network/HttpDownloader.h"
 #include "GutenbergManageActivity.h"
 #include "MappedInputManager.h"
-#include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -41,29 +39,6 @@ void GutenbergActivity::onEnter() {
   scroller.reset();
 
   requestUpdate();
-}
-
-void GutenbergActivity::onExit() {
-  Activity::onExit();
-  if (shouldTearDownWifiOnExit && WiFi.getMode() != WIFI_MODE_NULL) {
-    WiFi.disconnect(false);
-  }
-}
-
-void GutenbergActivity::ensureWifiThen(const std::function<void()>& action) {
-  if (WiFi.status() == WL_CONNECTED) {
-    action();
-    return;
-  }
-  shouldTearDownWifiOnExit = true;
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
-                         [this, action](const ActivityResult& result) {
-                           if (!result.isCancelled) {
-                             action();
-                           } else {
-                             requestUpdate();
-                           }
-                         });
 }
 
 // "Sync Now" - loads only the popular list's metadata (one small request), never

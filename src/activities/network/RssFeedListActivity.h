@@ -1,8 +1,7 @@
 #pragma once
-#include <functional>
 #include <string>
 
-#include "../Activity.h"
+#include "NetworkActivity.h"
 #include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
@@ -14,7 +13,7 @@
 // Layout: subscribed feeds on top (or a "no feeds" placeholder), a thin
 // separator, then the fixed actions (Add Feed / Sync Now / Import from SD /
 // Manage Feeds) below.
-class RssFeedListActivity final : public Activity {
+class RssFeedListActivity final : public NetworkActivity {
   enum class State { List, Busy };
 
   ButtonNavigator buttonNavigator;
@@ -22,7 +21,6 @@ class RssFeedListActivity final : public Activity {
   State state = State::List;
   std::string busyMessage;
   int busyProgressPercent = -1;  // -1 = no progress bar, just the message
-  bool shouldTearDownWifiOnExit = false;
 
   // Marquee-scrolls the selected feed row's title when it's too long to fit -
   // shared mechanism, see ScrollingListRow.h.
@@ -33,10 +31,6 @@ class RssFeedListActivity final : public Activity {
   int feedRegionCount() const;
   static int actionRowCount() { return 4; }  // Add Feed, Sync Now, Import from SD, Manage Feeds
   int itemCount() const;
-
-  // Runs action() immediately if WiFi is already connected, otherwise launches
-  // WifiSelectionActivity first and runs action() only on a successful connect.
-  void ensureWifiThen(const std::function<void()>& action);
 
   void startAddFeedFlow();
   void onUrlEntered(const std::string& url);
@@ -55,9 +49,8 @@ class RssFeedListActivity final : public Activity {
 
  public:
   explicit RssFeedListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity("RssFeedList", renderer, mappedInput) {}
+      : NetworkActivity("RssFeedList", renderer, mappedInput) {}
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
 };

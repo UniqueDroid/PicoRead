@@ -6,7 +6,6 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <RssParser.h>
-#include <WiFi.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -16,7 +15,6 @@
 #include "RssArticleListActivity.h"
 #include "RssFeedManageActivity.h"
 #include "RssFeedStore.h"
-#include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
@@ -40,29 +38,6 @@ void RssFeedListActivity::onEnter() {
   selectorIndex = 0;
   scroller.reset();
   requestUpdate();
-}
-
-void RssFeedListActivity::onExit() {
-  Activity::onExit();
-  if (shouldTearDownWifiOnExit && WiFi.getMode() != WIFI_MODE_NULL) {
-    WiFi.disconnect(false);
-  }
-}
-
-void RssFeedListActivity::ensureWifiThen(const std::function<void()>& action) {
-  if (WiFi.status() == WL_CONNECTED) {
-    action();
-    return;
-  }
-  shouldTearDownWifiOnExit = true;
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
-                         [this, action](const ActivityResult& result) {
-                           if (!result.isCancelled) {
-                             action();
-                           } else {
-                             requestUpdate();
-                           }
-                         });
 }
 
 void RssFeedListActivity::startAddFeedFlow() {

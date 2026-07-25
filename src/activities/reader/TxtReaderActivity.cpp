@@ -277,10 +277,16 @@ void TxtReaderActivity::initializeReader() {
 
 void TxtReaderActivity::buildPageIndex() {
   pageOffsets.clear();
-  pageOffsets.push_back(0);  // First page starts at offset 0
 
   size_t offset = 0;
   const size_t fileSize = txt->getFileSize();
+
+  // Conservative estimate (short pages/small fonts skew low, so this errs on
+  // the high side) to avoid repeated vector growth-copy cycles while indexing
+  // large files - see CLAUDE.md's std::vector pre-allocation rule.
+  constexpr size_t kEstimatedBytesPerPage = 400;
+  pageOffsets.reserve(fileSize / kEstimatedBytesPerPage + 1);
+  pageOffsets.push_back(0);  // First page starts at offset 0
 
   LOG_DBG("TRS", "Building page index for %zu bytes...", fileSize);
 

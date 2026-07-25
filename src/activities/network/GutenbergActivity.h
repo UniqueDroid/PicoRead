@@ -1,11 +1,10 @@
 #pragma once
-#include <functional>
 #include <string>
 #include <vector>
 
-#include "../Activity.h"
 #include "GutenbergJsonParser.h"
 #include "GutenbergPaths.h"
+#include "NetworkActivity.h"
 #include "components/ScrollingListRow.h"
 #include "util/ButtonNavigator.h"
 
@@ -24,7 +23,7 @@
 // Selecting Random Book always re-fetches+downloads fresh (that's the point of
 // "random"); selecting a Popular Book downloads just that one, once, and reuses
 // the cached file after that.
-class GutenbergActivity final : public Activity {
+class GutenbergActivity final : public NetworkActivity {
   enum class State { List, Busy };
 
   ButtonNavigator buttonNavigator;
@@ -32,7 +31,6 @@ class GutenbergActivity final : public Activity {
   State state = State::List;
   std::string busyMessage;
   int busyProgressPercent = -1;  // -1 = no progress bar, just the message
-  bool shouldTearDownWifiOnExit = false;
   std::vector<GutenbergBook> popularBooks;  // in-memory only, loaded fresh each "Sync Now"
 
   // Marquee-scrolls the selected row's title when it's too long to fit - shared
@@ -45,7 +43,6 @@ class GutenbergActivity final : public Activity {
   static int actionItemCount() { return 2; }  // Sync Now (loads the list, not the books), Manage Books
   static int itemCount() { return contentItemCount() + actionItemCount(); }
 
-  void ensureWifiThen(const std::function<void()>& action);
   void loadPopularList();
   void openRandomBook();
   void openPopularBook(int index);
@@ -53,9 +50,8 @@ class GutenbergActivity final : public Activity {
 
  public:
   explicit GutenbergActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity("Gutenberg", renderer, mappedInput) {}
+      : NetworkActivity("Gutenberg", renderer, mappedInput) {}
   void onEnter() override;
-  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
 };

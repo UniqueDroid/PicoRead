@@ -40,7 +40,16 @@ void SettingsActivity::rebuildSettingsLists() {
   // reader activity ran — otherwise the font-family picker shows stale list.
   sdFontSystem.refreshIfDirty();
 
-  for (auto& setting : getSettingsList(&sdFontSystem.registry())) {
+  const auto allSettings = getSettingsList(&sdFontSystem.registry());
+  // Worst case every setting lands in one category - reserving the full count
+  // for each avoids growth-copy cycles on this heavy (std::function-laden)
+  // element type without needing a per-category count up front.
+  displaySettings.reserve(allSettings.size());
+  readerSettings.reserve(allSettings.size());
+  controlsSettings.reserve(allSettings.size());
+  systemSettings.reserve(allSettings.size());
+
+  for (auto& setting : allSettings) {
     if (setting.category == StrId::STR_NONE_OPT) continue;
     if (setting.category == StrId::STR_CAT_DISPLAY) {
       displaySettings.push_back(setting);
