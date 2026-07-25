@@ -49,6 +49,30 @@ std::string readFirstLine(const std::string& path) {
   return newline ? std::string(buf, newline - buf) : std::string(buf, n);
 }
 
+// Feed folders are named after the feed itself (see RssFeedStore::articleDirFor),
+// so the last path component of the article's folder IS the feed's display name.
+std::string rssFeedName(const std::string& filePath) {
+  std::string folder = FsHelpers::extractFolderPath(filePath);
+  if (!folder.empty() && folder.back() == '/') folder.pop_back();
+  const size_t slash = folder.rfind('/');
+  return slash == std::string::npos ? folder : folder.substr(slash + 1);
+}
+
+// Wikipedia's fixed filenames map directly to which content type they hold - see
+// WikipediaActivity's kArticlePath/kOnThisDayPath/randomPath().
+std::string wikipediaSubtitle(const std::string& filePath) {
+  const std::string fileName = filePath.substr(filePath.rfind('/') + 1);
+  if (fileName == "article.txt") return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
+  if (fileName == "onthisday.txt") return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
+  if (fileName.rfind("random", 0) == 0) {
+    const int index = atoi(fileName.c_str() + strlen("random"));
+    char buf[40];
+    snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index + 1);
+    return buf;
+  }
+  return I18N.get(StrId::STR_WIKIPEDIA);
+}
+
 // Counts the synced article files directly in dir (no recursion) - used to show
 // "N / total" in the status bar instead of the bare "0"/"1"/... filename.
 size_t countArticles(const std::string& dir) {
@@ -88,7 +112,16 @@ void TxtReaderActivity::onEnter() {
   }
   APP_STATE.openEpubPath = filePath;
   APP_STATE.saveToFile();
-  RECENT_BOOKS.addBook(filePath, displayTitle, "", "");
+  // The "author" slot doubles as a source subtitle for cover-less content (RSS
+  // feed name / Wikipedia category) - see PicoReadTheme::drawRecentBookCover's
+  // generated-cover text for cover-less books.
+  std::string subtitle;
+  if (fromRssForTitle) {
+    subtitle = rssFeedName(filePath);
+  } else if (fromWikipediaForTitle) {
+    subtitle = wikipediaSubtitle(filePath);
+  }
+  RECENT_BOOKS.addBook(filePath, displayTitle, subtitle, "");
 
   // "0"/"1"/... filenames are meaningless in the status bar's title slot; show
   // this article's 1-indexed position among the feed's synced articles instead.

@@ -149,9 +149,30 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
       }
       renderer.drawRect(tileX + kCoverHPadding, tileY, tileWidth - 2 * kCoverHPadding, tileHeight, true);
       if (!hasCover) {
-        renderer.fillRect(tileX + kCoverHPadding, tileY + tileHeight / 3, tileWidth - 2 * kCoverHPadding,
-                          2 * tileHeight / 3, true);
+        const int blackTop = tileY + tileHeight / 3;
+        const int blackWidth = tileWidth - 2 * kCoverHPadding;
+        renderer.fillRect(tileX + kCoverHPadding, blackTop, blackWidth, 2 * tileHeight / 3, true);
         renderer.drawIcon(CoverIcon, tileX + kCoverHPadding + 24, tileY + 24, 32);
+
+        // Generated placeholder cover for books with no real cover art (RSS/Wikipedia
+        // articles): the title (and, if set, a source subtitle - feed name / Wikipedia
+        // category, see TxtReaderActivity::onEnter) drawn white-on-black in the upper
+        // part of the black fill. Sits above the separate title/author overlay box
+        // drawn later, which occupies the bottom of the same fill.
+        const int genMaxWidth = blackWidth - 24;
+        const auto genTitleLines = renderer.wrappedText(UI_12_FONT_ID, recentBooks[i].title.c_str(), genMaxWidth, 3);
+        const int genLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+        int genY = blackTop + 16;
+        for (const auto& line : genTitleLines) {
+          const int lineWidth = renderer.getTextWidth(UI_12_FONT_ID, line.c_str());
+          renderer.drawText(UI_12_FONT_ID, tileX + (tileWidth - lineWidth) / 2, genY, line.c_str(), false);
+          genY += genLineHeight;
+        }
+        if (!recentBooks[i].author.empty()) {
+          const std::string subtitle = renderer.truncatedText(SMALL_FONT_ID, recentBooks[i].author.c_str(), genMaxWidth);
+          const int subtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, subtitle.c_str());
+          renderer.drawText(SMALL_FONT_ID, tileX + (tileWidth - subtitleWidth) / 2, genY + 6, subtitle.c_str(), false);
+        }
       }
     }
     coverBufferStored = storeCoverBuffer();
