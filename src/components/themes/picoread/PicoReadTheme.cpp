@@ -166,8 +166,7 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
         const int genMaxWidth = blackWidth - 24;
         const auto genLines = renderer.wrappedText(UI_12_FONT_ID, generatedText.c_str(), genMaxWidth, 4);
         const int genLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-        const int genTotalHeight = genLineHeight * static_cast<int>(genLines.size());
-        int genY = blackTop + (2 * tileHeight / 3 - genTotalHeight) / 2;
+        int genY = blackTop + 16;
         for (const auto& line : genLines) {
           const int lineWidth = renderer.getTextWidth(UI_12_FONT_ID, line.c_str());
           renderer.drawText(UI_12_FONT_ID, tileX + (tileWidth - lineWidth) / 2, genY, line.c_str(), false);
@@ -185,9 +184,14 @@ void PicoReadTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const 
     const int maxTextWidth = tileWidth - 2 * kCoverHPadding - 16;
 
     const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, recentBooks[i].title.c_str(), maxTextWidth, 2);
+    // The generated cover (above) already shows the source for cover-less books, so
+    // repeating it here would be redundant - only show the author line for books with
+    // a real cover (where it's the book's actual author, not a generated subtitle).
+    const bool hasCoverForBook = !recentBooks[i].coverBmpPath.empty();
     const std::string& author = recentBooks[i].author;
-    const std::string truncatedAuthor =
-        author.empty() ? std::string{} : renderer.truncatedText(SMALL_FONT_ID, author.c_str(), maxTextWidth);
+    const std::string truncatedAuthor = (hasCoverForBook && !author.empty())
+                                             ? renderer.truncatedText(SMALL_FONT_ID, author.c_str(), maxTextWidth)
+                                             : std::string{};
 
     const int titleLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
     int totalTextHeight = titleLineHeight * static_cast<int>(titleLines.size());
