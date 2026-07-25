@@ -124,9 +124,11 @@ void RssFeedListActivity::syncAllFeeds() {
     char buf[96];
     snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), static_cast<int>(i + 1), static_cast<int>(feeds.size()));
     busyMessage = buf;
+    busyProgressPercent = static_cast<int>((i + 1) * 100 / feeds.size());
     requestUpdateAndWait();
     syncOneFeed(i);
   }
+  busyProgressPercent = -1;
   state = State::List;
   requestUpdate();
 }
@@ -289,8 +291,8 @@ void RssFeedListActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_RSS_FEEDS));
 
   if (state == State::Busy) {
-    GUI.drawPopup(renderer, busyMessage.c_str());
-    renderer.displayBuffer();
+    const Rect popupRect = GUI.drawPopup(renderer, busyMessage.c_str());
+    if (busyProgressPercent >= 0) GUI.fillPopupProgress(renderer, popupRect, busyProgressPercent);
     return;
   }
 

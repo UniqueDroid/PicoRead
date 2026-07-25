@@ -20,6 +20,7 @@ class RssFeedListActivity final : public Activity {
   size_t selectorIndex = 0;
   State state = State::List;
   std::string busyMessage;
+  int busyProgressPercent = -1;  // -1 = no progress bar, just the message
   bool shouldTearDownWifiOnExit = false;
 
   // 1 when there are no feeds yet (a non-actionable placeholder row), else one row

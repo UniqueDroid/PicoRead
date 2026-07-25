@@ -217,6 +217,7 @@ void WikipediaActivity::syncAll() {
     char buf[32];
     snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), step, total);
     busyMessage = buf;
+    busyProgressPercent = step * 100 / total;
     requestUpdateAndWait();
   };
 
@@ -229,6 +230,7 @@ void WikipediaActivity::syncAll() {
     downloadRandomArticle(i);
   }
 
+  busyProgressPercent = -1;
   state = State::List;
   requestUpdate();
 }
@@ -304,8 +306,8 @@ void WikipediaActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_WIKIPEDIA));
 
   if (state == State::Busy) {
-    GUI.drawPopup(renderer, busyMessage.c_str());
-    renderer.displayBuffer();
+    const Rect popupRect = GUI.drawPopup(renderer, busyMessage.c_str());
+    if (busyProgressPercent >= 0) GUI.fillPopupProgress(renderer, popupRect, busyProgressPercent);
     return;
   }
 

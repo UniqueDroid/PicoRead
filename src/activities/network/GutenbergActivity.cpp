@@ -10,7 +10,6 @@
 #include <cstdio>
 
 #include "network/HttpDownloader.h"
-#include "GutenbergJsonParser.h"
 #include "MappedInputManager.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/ConfirmationActivity.h"
@@ -20,7 +19,7 @@
 namespace {
 constexpr const char* kGutenbergDir = "/.picoread/gutenberg";
 constexpr const char* kRandomBookPath = "/.picoread/gutenberg/random.epub";
-constexpr const char* kManifestPath = "/.picoread/gutenberg/manifest.txt";
+constexpr const char* kListPath = "/.picoread/gutenberg/list.txt";
 
 std::string popularBookPath(int index) {
   char buf[48];
@@ -34,13 +33,43 @@ bool writeTextFile(const std::string& path, const std::string& content) {
   file.write(reinterpret_cast<const uint8_t*>(content.data()), content.size());
   return true;
 }
+
+std::string readTextFile(const std::string& path) {
+  HalFile file;
+  if (!Storage.openFileForRead("GUTB", path, file)) return "";
+  std::string content;
+  char buf[256];
+  size_t n;
+  while ((n = file.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf))) > 0) {
+    content.append(buf, n);
+  }
+  return content;
+}
 }  // namespace
 
 void GutenbergActivity::onEnter() {
   Activity::onEnter();
   state = State::List;
   selectorIndex = 0;
-  loadPopularTitles();
+
+  // The list (titles + EPUB URLs) is small enough to just keep on SD - avoids
+  // re-fetching every time the tile is revisited, unlike the actual EPUBs which
+  // are only ever fetched on selection (see class comment in the header).
+  popularBooks.clear();
+  const std::string raw = readTextFile(kListPath);
+  size_t start = 0;
+  while (popularBooks.size() < static_cast<size_t>(kPopularCount) && start < raw.size()) {
+    const size_t titleEnd = raw.find('\n', start);
+    if (titleEnd == std::string::npos) break;
+    const size_t urlEnd = raw.find('\n', titleEnd + 1);
+    if (urlEnd == std::string::npos) break;
+    GutenbergBook book;
+    book.title = raw.substr(start, titleEnd - start);
+    book.epubUrl = raw.substr(titleEnd + 1, urlEnd - titleEnd - 1);
+    if (!book.title.empty()) popularBooks.push_back(book);
+    start = urlEnd + 1;
+  }
+
   requestUpdate();
 }
 
@@ -67,50 +96,14 @@ void GutenbergActivity::ensureWifiThen(const std::function<void()>& action) {
                          });
 }
 
-void GutenbergActivity::loadPopularTitles() {
-  popularTitles.clear();
-  HalFile file;
-  if (!Storage.openFileForRead("GUTB", kManifestPath, file)) return;
-  std::string line;
-  char buf[256];
-  size_t n;
-  std::string pending;
-  while ((n = file.read(reinterpret_cast<uint8_t*>(buf), sizeof(buf))) > 0) {
-    pending.append(buf, n);
-  }
-  size_t start = 0;
-  while (start < pending.size() && popularTitles.size() < static_cast<size_t>(kPopularCount)) {
-    const size_t nl = pending.find('\n', start);
-    const std::string entry = nl == std::string::npos ? pending.substr(start) : pending.substr(start, nl - start);
-    if (!entry.empty()) popularTitles.push_back(entry);
-    if (nl == std::string::npos) break;
-    start = nl + 1;
-  }
-}
+// "Sync Now" - loads only the popular list's metadata (one small request), never
+// the books themselves. An earlier version downloaded all 5 EPUBs right here,
+// which could take several minutes with no feedback and looked like a freeze.
+void GutenbergActivity::loadPopularList() {
+  state = State::Busy;
+  busyMessage = tr(STR_LOADING);
+  requestUpdateAndWait();
 
-bool GutenbergActivity::downloadRandomBook() {
-  // Gutendex has ~75k books at ~32/page; a bounded random page keeps this simple
-  // without a separate call just to learn the exact current count.
-  const int page = random(2000) + 1;
-  char urlBuf[64];
-  snprintf(urlBuf, sizeof(urlBuf), "https://gutendex.com/books/?page=%d", page);
-
-  GutendexBooksParser parser(1);
-  const bool fetchOk = HttpDownloader::fetchUrl(
-      urlBuf, [&parser](const uint8_t* data, size_t len) {
-        parser.feed(reinterpret_cast<const char*>(data), len);
-        return true;
-      });
-  if (!fetchOk || parser.getBooks().empty() || parser.getBooks()[0].epubUrl.empty()) {
-    LOG_ERR("GUTB", "Random book fetch failed (page %d)", page);
-    return false;
-  }
-
-  Storage.mkdir(kGutenbergDir, true);
-  return HttpDownloader::downloadToFile(parser.getBooks()[0].epubUrl, kRandomBookPath) == HttpDownloader::OK;
-}
-
-bool GutenbergActivity::downloadPopularBooks() {
   // Default sort is by download count descending - exactly "popular books".
   GutendexBooksParser parser(kPopularCount);
   const bool fetchOk = HttpDownloader::fetchUrl(
@@ -118,74 +111,114 @@ bool GutenbergActivity::downloadPopularBooks() {
         parser.feed(reinterpret_cast<const char*>(data), len);
         return true;
       });
-  if (!fetchOk || parser.getBooks().empty()) {
-    LOG_ERR("GUTB", "Popular books list fetch failed");
-    return false;
-  }
 
-  Storage.mkdir(kGutenbergDir, true);
-  std::string manifest;
-  bool anyOk = false;
-  const auto& books = parser.getBooks();
-  for (size_t i = 0; i < books.size() && i < static_cast<size_t>(kPopularCount); i++) {
-    manifest += books[i].title + "\n";
-    if (books[i].epubUrl.empty()) continue;
-    if (HttpDownloader::downloadToFile(books[i].epubUrl, popularBookPath(static_cast<int>(i))) ==
-        HttpDownloader::OK) {
-      anyOk = true;
-    } else {
-      LOG_ERR("GUTB", "Popular book %d download failed: %s", static_cast<int>(i), books[i].title.c_str());
+  if (fetchOk && !parser.getBooks().empty()) {
+    popularBooks = parser.getBooks();
+    std::string listContent;
+    for (const auto& book : popularBooks) {
+      listContent += book.title + "\n" + book.epubUrl + "\n";
     }
+    Storage.mkdir(kGutenbergDir, true);
+    writeTextFile(kListPath, listContent);
+  } else {
+    LOG_ERR("GUTB", "Popular books list fetch failed");
   }
-  writeTextFile(kManifestPath, manifest);
-  loadPopularTitles();
-  return anyOk;
-}
-
-// Downloads everything in one pass, same reasoning as WikipediaActivity::syncAll -
-// selecting an entry from the list never triggers a network fetch on its own, see
-// openEpubOrPromptSync().
-void GutenbergActivity::syncAll() {
-  state = State::Busy;
-  constexpr int kTotal = 2;
-  int step = 0;
-
-  auto showProgress = [&] {
-    ++step;
-    char buf[32];
-    snprintf(buf, sizeof(buf), tr(STR_RSS_SYNCING_FORMAT), step, kTotal);
-    busyMessage = buf;
-    requestUpdateAndWait();
-  };
-
-  showProgress();
-  downloadRandomBook();
-  showProgress();
-  downloadPopularBooks();
 
   state = State::List;
   requestUpdate();
 }
 
-void GutenbergActivity::promptSync() {
+void GutenbergActivity::openRandomBook() {
+  ensureWifiThen([this] {
+    state = State::Busy;
+    busyMessage = tr(STR_LOADING);
+    requestUpdateAndWait();
+
+    // Gutendex has ~75k books at ~32/page; a bounded random page keeps this
+    // simple without a separate call just to learn the exact current count.
+    const int page = random(2000) + 1;
+    char urlBuf[64];
+    snprintf(urlBuf, sizeof(urlBuf), "https://gutendex.com/books/?page=%d", page);
+
+    GutendexBooksParser parser(1);
+    const bool fetchOk = HttpDownloader::fetchUrl(
+        urlBuf, [&parser](const uint8_t* data, size_t len) {
+          parser.feed(reinterpret_cast<const char*>(data), len);
+          return true;
+        });
+
+    bool ok = false;
+    if (fetchOk && !parser.getBooks().empty() && !parser.getBooks()[0].epubUrl.empty()) {
+      Storage.mkdir(kGutenbergDir, true);
+      busyProgressPercent = 0;
+      ok = HttpDownloader::downloadToFile(
+               parser.getBooks()[0].epubUrl, kRandomBookPath,
+               [this](size_t downloaded, size_t total) {
+                 busyProgressPercent = total > 0 ? static_cast<int>(downloaded * 100 / total) : 0;
+                 requestUpdate(true);
+               }) == HttpDownloader::OK;
+    } else {
+      LOG_ERR("GUTB", "Random book fetch failed (page %d)", page);
+    }
+
+    busyProgressPercent = -1;
+    if (ok) {
+      activityManager.goToReader(kRandomBookPath);
+    } else {
+      state = State::List;
+      requestUpdate();
+    }
+  });
+}
+
+void GutenbergActivity::openPopularBook(int index) {
+  if (index < 0 || index >= static_cast<int>(popularBooks.size())) {
+    promptLoadList();
+    return;
+  }
+
+  const std::string path = popularBookPath(index);
+  if (Storage.exists(path.c_str())) {
+    activityManager.goToReader(path);
+    return;
+  }
+
+  const std::string url = popularBooks[index].epubUrl;
+  ensureWifiThen([this, path, url] {
+    state = State::Busy;
+    busyMessage = tr(STR_LOADING);
+    requestUpdateAndWait();
+
+    Storage.mkdir(kGutenbergDir, true);
+    busyProgressPercent = 0;
+    const bool ok = !url.empty() && HttpDownloader::downloadToFile(
+                                        url, path,
+                                        [this](size_t downloaded, size_t total) {
+                                          busyProgressPercent = total > 0 ? static_cast<int>(downloaded * 100 / total) : 0;
+                                          requestUpdate(true);
+                                        }) == HttpDownloader::OK;
+    busyProgressPercent = -1;
+    if (ok) {
+      activityManager.goToReader(path);
+    } else {
+      LOG_ERR("GUTB", "Popular book download failed: %s", path.c_str());
+      state = State::List;
+      requestUpdate();
+    }
+  });
+}
+
+void GutenbergActivity::promptLoadList() {
   startActivityForResult(
       std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_GUTENBERG), tr(STR_RSS_NOT_SYNCED_YET),
                                              tr(STR_CANCEL), tr(STR_RSS_SYNC_NOW_SHORT)),
       [this](const ActivityResult& result) {
         if (!result.isCancelled) {
-          ensureWifiThen([this] { syncAll(); });
+          ensureWifiThen([this] { loadPopularList(); });
         } else {
           requestUpdate();
         }
       });
-}
-
-void GutenbergActivity::openEpubOrPromptSync(const std::string& path) {
-  if (Storage.exists(path.c_str())) {
-    activityManager.goToReader(path);
-    return;
-  }
-  promptSync();
 }
 
 void GutenbergActivity::loop() {
@@ -201,11 +234,11 @@ void GutenbergActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (static_cast<int>(selectorIndex) == 0) {
-      openEpubOrPromptSync(kRandomBookPath);
+      openRandomBook();
     } else if (static_cast<int>(selectorIndex) < contentCount) {
-      openEpubOrPromptSync(popularBookPath(static_cast<int>(selectorIndex) - 1));
+      openPopularBook(static_cast<int>(selectorIndex) - 1);
     } else {
-      ensureWifiThen([this] { syncAll(); });
+      ensureWifiThen([this] { loadPopularList(); });
     }
     return;
   }
@@ -230,8 +263,8 @@ void GutenbergActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_GUTENBERG));
 
   if (state == State::Busy) {
-    GUI.drawPopup(renderer, busyMessage.c_str());
-    renderer.displayBuffer();
+    const Rect popupRect = GUI.drawPopup(renderer, busyMessage.c_str());
+    if (busyProgressPercent >= 0) GUI.fillPopupProgress(renderer, popupRect, busyProgressPercent);
     return;
   }
 
@@ -252,7 +285,7 @@ void GutenbergActivity::render(RenderLock&&) {
       [this](int index) -> std::string {
         if (index == 0) return I18N.get(StrId::STR_GUTENBERG_RANDOM_BOOK);
         const size_t popularIndex = static_cast<size_t>(index - 1);
-        if (popularIndex < popularTitles.size()) return popularTitles[popularIndex];
+        if (popularIndex < popularBooks.size()) return popularBooks[popularIndex].title;
         char buf[40];
         snprintf(buf, sizeof(buf), tr(STR_GUTENBERG_POPULAR_FORMAT), static_cast<int>(popularIndex) + 1);
         return buf;
