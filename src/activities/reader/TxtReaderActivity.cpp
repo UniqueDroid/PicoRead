@@ -51,26 +51,32 @@ std::string readFirstLine(const std::string& path) {
 
 // Feed folders are named after the feed itself (see RssFeedStore::articleDirFor),
 // so the last path component of the article's folder IS the feed's display name.
+// "RSS-Feed:"/"Wiki:" prefixes match brand-style terms like "Wikipedia"/"RSS" that
+// stay unlocalized elsewhere in the project - not run through i18n.
 std::string rssFeedName(const std::string& filePath) {
   std::string folder = FsHelpers::extractFolderPath(filePath);
   if (!folder.empty() && folder.back() == '/') folder.pop_back();
   const size_t slash = folder.rfind('/');
-  return slash == std::string::npos ? folder : folder.substr(slash + 1);
+  const std::string feedName = slash == std::string::npos ? folder : folder.substr(slash + 1);
+  return "RSS-Feed: " + feedName;
 }
 
 // Wikipedia's fixed filenames map directly to which content type they hold - see
 // WikipediaActivity's kArticlePath/kOnThisDayPath/randomPath().
 std::string wikipediaSubtitle(const std::string& filePath) {
   const std::string fileName = filePath.substr(filePath.rfind('/') + 1);
-  if (fileName == "article.txt") return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
-  if (fileName == "onthisday.txt") return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
-  if (fileName.rfind("random", 0) == 0) {
+  std::string category;
+  if (fileName == "article.txt") {
+    category = I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
+  } else if (fileName == "onthisday.txt") {
+    category = I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
+  } else if (fileName.rfind("random", 0) == 0) {
     const int index = atoi(fileName.c_str() + strlen("random"));
     char buf[40];
     snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index + 1);
-    return buf;
+    category = buf;
   }
-  return I18N.get(StrId::STR_WIKIPEDIA);
+  return category.empty() ? I18N.get(StrId::STR_WIKIPEDIA) : "Wiki: " + category;
 }
 
 // Counts the synced article files directly in dir (no recursion) - used to show
