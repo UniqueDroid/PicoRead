@@ -20,7 +20,15 @@ class RssArticleListActivity final : public Activity {
   std::string dir;
   std::vector<std::string> titles;
 
+  // Marquee-scrolls the selected row's title when it's too long to fit at the
+  // larger font this list uses - see render()/loop(). Reset whenever the
+  // selection moves.
+  size_t scrollTitleOffset = 0;
+  unsigned long nextScrollStepMs = 0;
+
   void loadTitles();
+  void resetScroll();
+  void stepScroll();
 
  public:
   RssArticleListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, size_t feedIndex)

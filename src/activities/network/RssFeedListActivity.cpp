@@ -145,6 +145,12 @@ bool RssFeedListActivity::syncOneFeed(size_t feedIndex) {
   LOG_DBG("RSS", "Free heap before %s: %u bytes", feeds[feedIndex].url.c_str(), ESP.getFreeHeap());
 
   const std::string dir = RssFeedStore::articleDirFor(feedIndex);
+  // Clear out anything from a previous sync first: articles are written as
+  // 0.txt, 1.txt, ... and a fresh sync just overwrites those indices, so a
+  // feed that shrinks (fewer articles than last time) would otherwise leave
+  // stale files past the new count sitting around forever, invisible to the
+  // article list (which only goes by index.txt) but still taking up space.
+  Storage.removeDir(dir.c_str());
   Storage.mkdir(dir.c_str(), true);
 
   // One title per line, written alongside each article rather than assembled in
