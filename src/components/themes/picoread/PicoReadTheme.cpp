@@ -18,6 +18,7 @@
 #include "components/icons/library.h"
 #include "components/icons/recent.h"
 #include "components/icons/settings2.h"
+#include "components/icons/tetris.h"
 #include "components/icons/text32.h"
 #include "components/icons/transfer.h"
 #include "components/icons/wifi.h"
@@ -57,6 +58,8 @@ const uint8_t* iconForName(UIIcon icon) {
       return BookmarkIcon;
     case UIIcon::Flappy:
       return FlappyIcon;
+    case UIIcon::Tetris:
+      return TetrisIcon;
     case UIIcon::Text:
       return Text32Icon;
     default:

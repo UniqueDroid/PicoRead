@@ -28,6 +28,7 @@
 #include "RecentBooksStore.h"
 #include "RssFeedStore.h"
 #include "SdCardFontSystem.h"
+#include "TetrisHighScoreStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
@@ -356,6 +357,7 @@ void setup() {
   READING_STATS.loadFromFile();
   RSS_STORE.loadFromFile();
   FLAPPY_SCORES.loadFromFile();
+  TETRIS_SCORES.loadFromFile();
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 

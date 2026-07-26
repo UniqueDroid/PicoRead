@@ -41,6 +41,8 @@ class HomeActivity final : public Activity {
     ++i;
     if (item == HomeMenuItem::FLAPPY) return i;
     ++i;
+    if (item == HomeMenuItem::TETRIS) return i;
+    ++i;
     if (item == HomeMenuItem::STATS) return i;
     ++i;
     if (item == HomeMenuItem::RSS_FEEDS) return i;
@@ -64,6 +66,7 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::RECENTS;
     if (idx == i++) return HomeMenuItem::ALL_BOOKMARKS;
     if (idx == i++) return HomeMenuItem::FLAPPY;
+    if (idx == i++) return HomeMenuItem::TETRIS;
     if (idx == i++) return HomeMenuItem::STATS;
     if (idx == i++) return HomeMenuItem::RSS_FEEDS;
     if (idx == i++) return HomeMenuItem::WIKIPEDIA;
@@ -79,6 +82,7 @@ class HomeActivity final : public Activity {
   void onAllBookmarksOpen();
   void onReadingStatsOpen();
   void onFlappyGameOpen();
+  void onTetrisGameOpen();
   void onRssFeedsOpen();
   void onWikipediaOpen();
   void onGutenbergOpen();

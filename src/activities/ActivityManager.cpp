@@ -16,6 +16,7 @@
 #include "home/HomeActivity.h"
 #include "home/ReadingStatsActivity.h"
 #include "home/RecentBooksActivity.h"
+#include "home/TetrisGameActivity.h"
 #include "network/GutenbergActivity.h"
 #include "network/PicoReadWebServerActivity.h"
 #include "network/RssFeedListActivity.h"
@@ -203,6 +204,10 @@ void ActivityManager::goToFlappyGame() {
   replaceActivity(std::make_unique<FlappyGameActivity>(renderer, mappedInput));
 }
 
+void ActivityManager::goToTetrisGame() {
+  replaceActivity(std::make_unique<TetrisGameActivity>(renderer, mappedInput));
+}
+
 void ActivityManager::goToRssFeeds() {
   replaceActivity(std::make_unique<RssFeedListActivity>(renderer, mappedInput));
 }
@@ -253,6 +258,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::STATS;
     } else if (activityName == "FlappyGame") {
       initialMenuItem = HomeMenuItem::FLAPPY;
+    } else if (activityName == "TetrisGame") {
+      initialMenuItem = HomeMenuItem::TETRIS;
     } else if (activityName == "RssFeedList") {
       initialMenuItem = HomeMenuItem::RSS_FEEDS;
     } else if (activityName == "Wikipedia") {

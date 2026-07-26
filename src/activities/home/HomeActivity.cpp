@@ -21,8 +21,8 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 10;  // File Browser, Recents, Bookmarks, Flappy, Stats, RSS, Wikipedia, Gutenberg, File transfer,
-                   // Settings
+  int count = 11;  // File Browser, Recents, Bookmarks, Flappy, Tetris, Stats, RSS, Wikipedia, Gutenberg,
+                   // File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -198,6 +198,9 @@ void HomeActivity::loop() {
         case HomeMenuItem::FLAPPY:
           onFlappyGameOpen();
           break;
+        case HomeMenuItem::TETRIS:
+          onTetrisGameOpen();
+          break;
         case HomeMenuItem::STATS:
           onReadingStatsOpen();
           break;
@@ -252,14 +255,16 @@ void HomeActivity::render(RenderLock&&) {
   // Build menu items dynamically
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
   std::vector<const char*> menuItems = {
-      tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS),  tr(STR_FLAPPY_GAME),
-      tr(STR_READING_STATS), tr(STR_RSS_FEEDS),        tr(STR_WIKIPEDIA), tr(STR_GUTENBERG),
-      tr(STR_FILE_TRANSFER), updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Bookmark, Flappy, Book, Library, Text, Text, Transfer, Settings};
+      tr(STR_BROWSE_FILES),  tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS), tr(STR_FLAPPY_GAME),
+      tr(STR_TETRIS_GAME),   tr(STR_READING_STATS),     tr(STR_RSS_FEEDS), tr(STR_WIKIPEDIA),
+      tr(STR_GUTENBERG),     tr(STR_FILE_TRANSFER),
+      updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
+  std::vector<UIIcon> menuIcons = {Folder, Recent,  Bookmark, Flappy,    Tetris,
+                                   Book,   Library, Text,     Text,      Transfer, Settings};
 
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 8, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 8, Library);
+    menuItems.insert(menuItems.begin() + 9, tr(STR_OPDS_BROWSER));
+    menuIcons.insert(menuIcons.begin() + 9, Library);
   }
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
@@ -301,6 +306,7 @@ void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 void HomeActivity::onAllBookmarksOpen() { activityManager.goToAllBookmarks(); }
 void HomeActivity::onReadingStatsOpen() { activityManager.goToReadingStats(); }
 void HomeActivity::onFlappyGameOpen() { activityManager.goToFlappyGame(); }
+void HomeActivity::onTetrisGameOpen() { activityManager.goToTetrisGame(); }
 void HomeActivity::onRssFeedsOpen() { activityManager.goToRssFeeds(); }
 void HomeActivity::onWikipediaOpen() { activityManager.goToWikipedia(); }
 void HomeActivity::onGutenbergOpen() { activityManager.goToGutenberg(); }

@@ -23,6 +23,7 @@ enum class HomeMenuItem {
   RECENTS,
   ALL_BOOKMARKS,
   FLAPPY,
+  TETRIS,
   STATS,
   RSS_FEEDS,
   WIKIPEDIA,
@@ -101,6 +102,7 @@ class ActivityManager {
   void goToAllBookmarks();
   void goToReadingStats();
   void goToFlappyGame();
+  void goToTetrisGame();
   void goToRssFeeds();
   void goToWikipedia();
   void goToGutenberg();
