@@ -16,12 +16,20 @@ using State = RssParser::State;
 // document is - see the RssParser.h comment for why this matters on this
 // hardware. Cheap insurance beyond streaming the download itself: a single
 // mega-post would otherwise still balloon one RssArticle.
-constexpr size_t MAX_FIELD_LEN = 4096;
+//
+// Title/link get a small cap - neither is ever legitimately more than a few
+// hundred bytes, so there's no reason to reserve a large contiguous block for
+// them. Description is the one field that can genuinely hold a full teaser or
+// (for some blogs) a whole post, so it keeps a bigger budget - but even that
+// was lowered from an earlier 4096, see the crash-report note below.
+constexpr size_t MAX_TITLE_LEN = 300;
+constexpr size_t MAX_LINK_LEN = 300;
+constexpr size_t MAX_DESCRIPTION_LEN = 2048;
 constexpr size_t MAX_ARTICLES = 50;
 
-void appendCapped(std::string& dest, const char* s, int len) {
-  if (dest.size() >= MAX_FIELD_LEN || len <= 0) return;
-  const size_t room = MAX_FIELD_LEN - dest.size();
+void appendCapped(std::string& dest, const char* s, int len, size_t maxLen) {
+  if (dest.size() >= maxLen || len <= 0) return;
+  const size_t room = maxLen - dest.size();
   dest.append(s, std::min(static_cast<size_t>(len), room));
 }
 
@@ -40,17 +48,24 @@ void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char**
     if (p->articleCount >= MAX_ARTICLES) return;  // ignore further items, cap already reached
     p->state = State::Item;
     p->current = RssArticle{};
-    // Reserve each field's full MAX_FIELD_LEN capacity once instead of letting
-    // appendCapped's repeated appends grow it via ~doubling reallocations as
-    // expat feeds content in one chunk at a time - each reallocation needs a
-    // new contiguous heap block, and doing that for title/link/description on
+    // Reserve each field's capacity once instead of letting appendCapped's
+    // repeated appends grow it via ~doubling reallocations as expat feeds
+    // content in one chunk at a time - each reallocation needs a new
+    // contiguous heap block, and doing that for title/link/description on
     // every one of up to MAX_ARTICLES items per feed is real fragmentation
-    // pressure. Confirmed via crash-report symbolication: a std::string growth
-    // reallocation during expat's content parsing (doContent) was the abort()
-    // site in a real RSS-sync crash.
-    p->current.title.reserve(MAX_FIELD_LEN);
-    p->current.link.reserve(MAX_FIELD_LEN);
-    p->current.description.reserve(MAX_FIELD_LEN);
+    // pressure.
+    //
+    // First round of this fix reserved a uniform 4096 bytes for all three
+    // fields, which turned out to just move the failure: a live crash report
+    // symbolized straight to this reserve() call itself (operator new failing
+    // inside std::string::reserve, called from here) - meaning a 4096-byte
+    // contiguous block wasn't reliably available either, so batching the
+    // request into one larger allocation wasn't enough on its own. Asking for
+    // less (300 bytes for the fields that never legitimately need more, a
+    // lower 2048 cap for description) is far more likely to actually succeed.
+    p->current.title.reserve(MAX_TITLE_LEN);
+    p->current.link.reserve(MAX_LINK_LEN);
+    p->current.description.reserve(MAX_DESCRIPTION_LEN);
     return;
   }
 
@@ -66,7 +81,7 @@ void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char**
       // Atom: <link href="..."/> (self-closing, no character data). RSS: <link>url</link>.
       for (int i = 0; atts[i]; i += 2) {
         if (strcmp(atts[i], "href") == 0) {
-          appendCapped(p->current.link, atts[i + 1], static_cast<int>(strlen(atts[i + 1])));
+          appendCapped(p->current.link, atts[i + 1], static_cast<int>(strlen(atts[i + 1])), MAX_LINK_LEN);
         }
       }
       p->state = State::ItemLink;
@@ -81,18 +96,18 @@ void XMLCALL characterData(void* userData, const XML_Char* s, const int len) {
   auto* p = static_cast<RssParser*>(userData);
   switch (p->state) {
     case State::ChannelTitle:
-      appendCapped(p->feedData.title, s, len);
+      appendCapped(p->feedData.title, s, len, MAX_TITLE_LEN);
       break;
     case State::ItemTitle:
-      appendCapped(p->current.title, s, len);
+      appendCapped(p->current.title, s, len, MAX_TITLE_LEN);
       break;
     case State::ItemLink:
       // Only append for RSS's <link>url</link>; Atom already set current.link
       // from the href attribute and has no character data here.
-      appendCapped(p->current.link, s, len);
+      appendCapped(p->current.link, s, len, MAX_LINK_LEN);
       break;
     case State::ItemDescription:
-      appendCapped(p->current.description, s, len);
+      appendCapped(p->current.description, s, len, MAX_DESCRIPTION_LEN);
       break;
     default:
       break;
