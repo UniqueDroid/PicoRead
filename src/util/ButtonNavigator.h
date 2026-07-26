@@ -38,6 +38,14 @@ class ButtonNavigator final {
   void onPreviousContinuous(const Callback& callback);
   void onContinuous(const Buttons& buttons, const Callback& callback);
 
+  // Wires the common "list of totalItems, Next/Previous move index with
+  // wrap-around, held Next/Previous page-jumps by pageItems" idiom in one
+  // call instead of four onXRelease/onXContinuous callbacks. Pass
+  // pageItems == totalItems to get single-step (non-page-jump) continuous
+  // nav instead, since nextPageIndex/previousPageIndex fall back to plain
+  // index stepping once a page holds every item.
+  void wireListNav(int& index, int totalItems, int pageItems, const Callback& onChange);
+
   [[nodiscard]] static int nextIndex(int currentIndex, int totalItems);
   [[nodiscard]] static int previousIndex(int currentIndex, int totalItems);
 

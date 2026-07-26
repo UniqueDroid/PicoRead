@@ -29,6 +29,25 @@ void ButtonNavigator::onNextContinuous(const Callback& callback) { onContinuous(
 
 void ButtonNavigator::onPreviousContinuous(const Callback& callback) { onContinuous(getPreviousButtons(), callback); }
 
+void ButtonNavigator::wireListNav(int& index, const int totalItems, const int pageItems, const Callback& onChange) {
+  onNextRelease([&index, totalItems, onChange] {
+    index = nextIndex(index, totalItems);
+    onChange();
+  });
+  onPreviousRelease([&index, totalItems, onChange] {
+    index = previousIndex(index, totalItems);
+    onChange();
+  });
+  onNextContinuous([&index, totalItems, pageItems, onChange] {
+    index = nextPageIndex(index, totalItems, pageItems);
+    onChange();
+  });
+  onPreviousContinuous([&index, totalItems, pageItems, onChange] {
+    index = previousPageIndex(index, totalItems, pageItems);
+    onChange();
+  });
+}
+
 void ButtonNavigator::onPress(const Buttons& buttons, const Callback& callback) {
   const bool wasPressed = std::any_of(buttons.begin(), buttons.end(), [](const MappedInputManager::Button button) {
     return mappedInput != nullptr && mappedInput->wasPressed(button);

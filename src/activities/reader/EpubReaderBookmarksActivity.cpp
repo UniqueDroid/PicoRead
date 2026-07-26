@@ -136,27 +136,9 @@ void EpubReaderBookmarksActivity::loop() {
     requestUpdate();
   }
 
-  buttonNavigator.onNextRelease([this] {
-    selectorIndex = ButtonNavigator::nextIndex(selectorIndex, bookmarks.size());
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousRelease([this] {
-    selectorIndex = ButtonNavigator::previousIndex(selectorIndex, bookmarks.size());
-    requestUpdate();
-  });
-
-  buttonNavigator.onNextContinuous([this] {
-    selectorIndex = ButtonNavigator::nextPageIndex(selectorIndex, bookmarks.size(),
-                                                   GUI.getListPageItems(getListHeight(renderer), true));
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousContinuous([this] {
-    selectorIndex = ButtonNavigator::previousPageIndex(selectorIndex, bookmarks.size(),
-                                                       GUI.getListPageItems(getListHeight(renderer), true));
-    requestUpdate();
-  });
+  const int pageItems = GUI.getListPageItems(getListHeight(renderer), true);
+  buttonNavigator.wireListNav(selectorIndex, static_cast<int>(bookmarks.size()), pageItems,
+                              [this] { requestUpdate(); });
 }
 
 void EpubReaderBookmarksActivity::render(RenderLock&&) {

@@ -138,26 +138,11 @@ void StatusBarSettingsActivity::loop() {
     return;
   }
 
-  // Handle navigation
-  buttonNavigator.onNextRelease([this] {
-    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, visibleItemCount);
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousRelease([this] {
-    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, visibleItemCount);
-    requestUpdate();
-  });
-
-  buttonNavigator.onNextContinuous([this] {
-    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, visibleItemCount);
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousContinuous([this] {
-    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, visibleItemCount);
-    requestUpdate();
-  });
+  // Handle navigation. pageItems == visibleItemCount makes held Next/Previous
+  // step one at a time too (nextPageIndex/previousPageIndex fall back to
+  // plain index stepping once a "page" holds every item) - this list has no
+  // separate page-jump behavior, unlike the font/language pickers.
+  buttonNavigator.wireListNav(selectedIndex, visibleItemCount, visibleItemCount, [this] { requestUpdate(); });
 }
 
 void StatusBarSettingsActivity::handleSelection() {
