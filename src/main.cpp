@@ -21,6 +21,7 @@
 #include "PicoReadSettings.h"
 #include "PicoReadState.h"
 #include "FlappyHighScoreStore.h"
+#include "HomeMenuLayoutStore.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
@@ -358,6 +359,7 @@ void setup() {
   RSS_STORE.loadFromFile();
   FLAPPY_SCORES.loadFromFile();
   TETRIS_SCORES.loadFromFile();
+  HOME_MENU_LAYOUT.loadFromFile();
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 

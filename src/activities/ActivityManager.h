@@ -11,27 +11,12 @@
 #include <vector>
 
 #include "GfxRenderer.h"
+#include "HomeMenuItem.h"
 #include "MappedInputManager.h"
 #include "util/ScreenshotInfo.h"
 
 class Activity;    // forward declaration
 class RenderLock;  // forward declaration
-
-enum class HomeMenuItem {
-  NONE,
-  FILE_BROWSER,
-  RECENTS,
-  ALL_BOOKMARKS,
-  FLAPPY,
-  TETRIS,
-  STATS,
-  RSS_FEEDS,
-  WIKIPEDIA,
-  GUTENBERG,
-  OPDS_BROWSER,
-  FILE_TRANSFER,
-  SETTINGS_MENU
-};
 
 /**
  * ActivityManager

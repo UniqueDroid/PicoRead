@@ -12,6 +12,7 @@
 #include "PicoReadSettings.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
+#include "HomeMenuCustomizeActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
@@ -69,6 +70,7 @@ void SettingsActivity::rebuildSettingsLists() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMIZE_HOME_MENU, SettingAction::CustomizeHomeMenu));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
@@ -278,6 +280,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::CustomiseStatusBar:
         startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::CustomizeHomeMenu:
+        startActivityForResult(std::make_unique<HomeMenuCustomizeActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::KOReaderSync:
         startActivityForResult(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput), resultHandler);

@@ -20,14 +20,16 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 
+
 int HomeActivity::getMenuItemCount() const {
-  int count = 11;  // File Browser, Recents, Bookmarks, Flappy, Tetris, Stats, RSS, Wikipedia, Gutenberg,
-                   // File transfer, Settings
+  int count = 1;  // Settings - always shown, never hideable
+  for (const auto& entry : HOME_MENU_LAYOUT.getEntries()) {
+    if (!entry.visible) continue;
+    if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsServers) continue;
+    count++;
+  }
   if (!recentBooks.empty()) {
     count += recentBooks.size();
-  }
-  if (hasOpdsServers) {
-    count++;
   }
   return count;
 }
@@ -252,20 +254,23 @@ void HomeActivity::render(RenderLock&&) {
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
-  // Build menu items dynamically
+  // Build menu items from the user's stored order/visibility - see
+  // HomeMenuLayoutStore. Settings is never in that store: always shown,
+  // always appended last.
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
-  std::vector<const char*> menuItems = {
-      tr(STR_BROWSE_FILES),  tr(STR_MENU_RECENT_BOOKS), tr(STR_BOOKMARKS), tr(STR_FLAPPY_GAME),
-      tr(STR_TETRIS_GAME),   tr(STR_READING_STATS),     tr(STR_RSS_FEEDS), tr(STR_WIKIPEDIA),
-      tr(STR_GUTENBERG),     tr(STR_FILE_TRANSFER),
-      updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent,  Bookmark, Flappy,    Tetris,
-                                   Book,   Library, Text,     Text,      Transfer, Settings};
-
-  if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 9, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 9, Library);
+  const auto& layoutEntries = HOME_MENU_LAYOUT.getEntries();
+  std::vector<const char*> menuItems;
+  std::vector<UIIcon> menuIcons;
+  menuItems.reserve(layoutEntries.size() + 2);
+  menuIcons.reserve(layoutEntries.size() + 2);
+  for (const auto& entry : layoutEntries) {
+    if (!entry.visible) continue;
+    if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsServers) continue;
+    menuItems.push_back(homeMenuItemLabel(entry.item));
+    menuIcons.push_back(homeMenuItemIcon(entry.item));
   }
+  menuItems.push_back(updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE));
+  menuIcons.push_back(Settings);
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     // Insert Continue Reading at the top if enabled in theme

@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "./FileBrowserActivity.h"
+#include "HomeMenuLayoutStore.h"
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
 
@@ -30,49 +31,29 @@ class HomeActivity final : public Activity {
   std::vector<RecentBook> recentBooks;
   const HomeMenuItem initialMenuItem;
 
-  // Convert HomeMenuItem to menu index (used in onEnter)
+  // Convert HomeMenuItem to menu index (used in onEnter). Walks the user's
+  // stored order (HomeMenuLayoutStore) instead of a fixed sequence - Settings
+  // is never in that store, it's always shown, always last.
   static int menuItemToIndex(HomeMenuItem item, bool hasOpdsUrl) {
     int i = 0;
-    if (item == HomeMenuItem::FILE_BROWSER) return i;
-    ++i;
-    if (item == HomeMenuItem::RECENTS) return i;
-    ++i;
-    if (item == HomeMenuItem::ALL_BOOKMARKS) return i;
-    ++i;
-    if (item == HomeMenuItem::FLAPPY) return i;
-    ++i;
-    if (item == HomeMenuItem::TETRIS) return i;
-    ++i;
-    if (item == HomeMenuItem::STATS) return i;
-    ++i;
-    if (item == HomeMenuItem::RSS_FEEDS) return i;
-    ++i;
-    if (item == HomeMenuItem::WIKIPEDIA) return i;
-    ++i;
-    if (item == HomeMenuItem::GUTENBERG) return i;
-    ++i;
-    if (item == HomeMenuItem::OPDS_BROWSER) return hasOpdsUrl ? i : 0;
-    if (hasOpdsUrl) ++i;
-    if (item == HomeMenuItem::FILE_TRANSFER) return i;
-    ++i;
+    for (const auto& entry : HOME_MENU_LAYOUT.getEntries()) {
+      if (!entry.visible) continue;
+      if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsUrl) continue;
+      if (entry.item == item) return i;
+      ++i;
+    }
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
     return 0;
   }
 
-  // Convert menu index to HomeMenuItem (used in loop)
+  // Convert menu index to HomeMenuItem (used in loop) - same store walk, inverse direction.
   static HomeMenuItem indexToMenuItem(int idx, bool hasOpdsUrl) {
     int i = 0;
-    if (idx == i++) return HomeMenuItem::FILE_BROWSER;
-    if (idx == i++) return HomeMenuItem::RECENTS;
-    if (idx == i++) return HomeMenuItem::ALL_BOOKMARKS;
-    if (idx == i++) return HomeMenuItem::FLAPPY;
-    if (idx == i++) return HomeMenuItem::TETRIS;
-    if (idx == i++) return HomeMenuItem::STATS;
-    if (idx == i++) return HomeMenuItem::RSS_FEEDS;
-    if (idx == i++) return HomeMenuItem::WIKIPEDIA;
-    if (idx == i++) return HomeMenuItem::GUTENBERG;
-    if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
-    if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
+    for (const auto& entry : HOME_MENU_LAYOUT.getEntries()) {
+      if (!entry.visible) continue;
+      if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsUrl) continue;
+      if (idx == i++) return entry.item;
+    }
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;
   }
