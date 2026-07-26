@@ -40,6 +40,17 @@ void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char**
     if (p->articleCount >= MAX_ARTICLES) return;  // ignore further items, cap already reached
     p->state = State::Item;
     p->current = RssArticle{};
+    // Reserve each field's full MAX_FIELD_LEN capacity once instead of letting
+    // appendCapped's repeated appends grow it via ~doubling reallocations as
+    // expat feeds content in one chunk at a time - each reallocation needs a
+    // new contiguous heap block, and doing that for title/link/description on
+    // every one of up to MAX_ARTICLES items per feed is real fragmentation
+    // pressure. Confirmed via crash-report symbolication: a std::string growth
+    // reallocation during expat's content parsing (doContent) was the abort()
+    // site in a real RSS-sync crash.
+    p->current.title.reserve(MAX_FIELD_LEN);
+    p->current.link.reserve(MAX_FIELD_LEN);
+    p->current.description.reserve(MAX_FIELD_LEN);
     return;
   }
 
