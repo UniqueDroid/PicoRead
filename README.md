@@ -34,7 +34,7 @@ More to come as I find time. See [Credits](#credits) for the full attribution.
 
 Some Xteink units bought through third-party resellers (AliExpress and similar) ship with USB flashing locked. Units bought directly from xteink.com are not affected — skip this section.
 
-If flashing fails and you suspect a lock, first try the web installer below with the device connected. Only reach for the **Xteink Unlocker** (part of the upstream CrossPoint tooling, at https://crosspointreader.com/#unlock-tool) if the browser genuinely can't see the device at all.
+If flashing over USB fails and you suspect a lock, try the **[SD-card method](#installing)** first — the OEM bootloader reads `update.bin` straight off the SD card with no USB/computer involved at all, so a USB lock doesn't apply to it. Only reach for the **Xteink Unlocker** (part of the upstream CrossPoint tooling, at https://crosspointreader.com/#unlock-tool) if the SD-card flash fails too — locked units are locked for USB flashing specifically, so unlocking is what gets USB working again, not a prerequisite for the SD-card path.
 
 > **Before you touch the unlocker: it only officially lists CrossPoint and CrossInk, not PicoRead.** Once the device is unlocked, use its "Custom .bin" option to flash a PicoRead build instead. Flashing an unsupported firmware on a locked device can brick it permanently or trap it on that firmware with no way back — if USB gets re-locked and the firmware you're stuck with has no OTA path, that's it. Don't experiment here.
 
@@ -106,7 +106,9 @@ The RSS tile on the home screen manages a small offline feed reader. Subscribed 
 
 - **Manage Feeds** — lists every feed for one-tap removal, plus a "Delete All Feeds" row to clear everything at once.
 
-Tapping a synced feed shows a list of every synced article's title to pick from. Paging past the first/last page of an article jumps straight into the previous/next one, and the status bar shows your position in the feed ("3 / 12"). Back returns to the RSS overview instead of Home. Synced articles live under `.picoread/rss/<feed-name>/` (folder named after the feed, sanitized for the SD card's filesystem) and follow the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
+Tapping a synced feed shows a list of every synced article's title to pick from. Paging past the first/last page of an article jumps straight into the previous/next one, and the status bar shows your position in the feed ("3 / 12"). Back returns to the RSS overview instead of Home.
+
+**On the SD card:** the feed *subscription list* (URL + title per feed) is the one piece of RSS data that's real JSON, at `.picoread/rss_feeds.json` — the same file `Import from SD Card` reads/writes, just persisted rather than one-off. Each feed's *synced articles*, on the other hand, live under `.picoread/rss/<feed-name>/` (folder named after the feed's title, sanitized for the SD card's filesystem, with a numeric suffix if two feeds sanitize to the same name) as plain numbered files — `0.txt`, `1.txt`, ... — each just the article title on line 1, then link, then the body text with HTML stripped. A sync also writes an `index.txt` next to them: one title per line, in article order, so the article list can populate by reading one small file instead of opening every article just to show its title. (Feeds synced before `index.txt` existed still work — the list falls back to opening each article and reading its first line — but re-syncing rebuilds the fast index.) All of this follows the same caching philosophy as the rest of the firmware (see [How the caching works](#how-the-caching-works)).
 
 ---
 
@@ -118,7 +120,9 @@ The Wikipedia tile on the home screen fetches content from Wikipedia's own REST 
 - **On This Day** — a digest of historical events for today's date.
 - **Random Article 1-5** — five random articles, each its own entry.
 
-None of these fetch on their own when selected — tap **Sync Now** (below a divider, like the RSS reader's action row) to download everything and save it to the SD card, then read it fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home. Files live under `.picoread/wikipedia/` and are overwritten on each sync — no history is kept.
+None of these fetch on their own when selected — tap **Sync Now** (below a divider, like the RSS reader's action row) to download everything and save it to the SD card, then read it fully offline afterward (handy for e.g. syncing once before leaving the house). Selecting an entry before ever syncing offers to sync right away instead of just bouncing back to the list. Back returns to the Wikipedia overview instead of Home.
+
+**On the SD card:** Wikipedia's REST API replies in JSON, but since the list of entries is fixed (not user-managed like RSS feeds or Gutenberg's catalog), there's no title index to maintain — each entry just gets its own fixed-name plain-text file straight under `.picoread/wikipedia/`: `article.txt`, `onthisday.txt`, `random0.txt`...`random4.txt`. Every sync overwrites all of them — no history is kept.
 
 ---
 
@@ -136,7 +140,7 @@ Unlike Wikipedia's "sync everything at once" model, **Sync Now** only fetches th
 - **Move to Library** — relocates the file into your own library folder (`/ebooks` by default, editable via **Change Library Folder** in the same screen) under a name based on the book's title, so it shows up as a permanent book instead of living in Gutenberg's cache.
 - **Delete** — removes the downloaded file.
 
-Files live under `.picoread/gutenberg/`.
+**On the SD card**, everything lives under `.picoread/gutenberg/`. [Gutendex](https://gutendex.com) itself answers in JSON, but PicoRead only ever needs title + EPUB link out of that response, so `Sync Now` reduces it down to a plain `list.txt` (one `title` line, one `url` line, per book — no JSON parsing needed again once it's on the card) instead of caching the raw API response. The books themselves are saved as `random.epub` and `popular0.epub`...`popular4.epub`; your chosen library folder path is a one-line `library_path.txt`.
 
 ---
 
