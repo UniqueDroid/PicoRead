@@ -22,7 +22,7 @@
 
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 1;  // Settings - always shown, never hideable
+  int count = 0;
   for (const auto& entry : HOME_MENU_LAYOUT.getEntries()) {
     if (!entry.visible) continue;
     if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsServers) continue;
@@ -255,22 +255,25 @@ void HomeActivity::render(RenderLock&&) {
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
   // Build menu items from the user's stored order/visibility - see
-  // HomeMenuLayoutStore. Settings is never in that store: always shown,
-  // always appended last.
+  // HomeMenuLayoutStore. Settings is a normal (movable, non-hideable) entry
+  // in that store, so it needs its own label here only because that label
+  // depends on updateAvailable - homeMenuItemLabel() can't know that.
   const bool updateAvailable = APP_STATE.firmwareUpdateAvailable;
   const auto& layoutEntries = HOME_MENU_LAYOUT.getEntries();
   std::vector<const char*> menuItems;
   std::vector<UIIcon> menuIcons;
-  menuItems.reserve(layoutEntries.size() + 2);
-  menuIcons.reserve(layoutEntries.size() + 2);
+  menuItems.reserve(layoutEntries.size() + 1);
+  menuIcons.reserve(layoutEntries.size() + 1);
   for (const auto& entry : layoutEntries) {
     if (!entry.visible) continue;
     if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsServers) continue;
-    menuItems.push_back(homeMenuItemLabel(entry.item));
+    if (entry.item == HomeMenuItem::SETTINGS_MENU) {
+      menuItems.push_back(updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE));
+    } else {
+      menuItems.push_back(homeMenuItemLabel(entry.item));
+    }
     menuIcons.push_back(homeMenuItemIcon(entry.item));
   }
-  menuItems.push_back(updateAvailable ? tr(STR_SETTINGS_TITLE_UPDATE) : tr(STR_SETTINGS_TITLE));
-  menuIcons.push_back(Settings);
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     // Insert Continue Reading at the top if enabled in theme

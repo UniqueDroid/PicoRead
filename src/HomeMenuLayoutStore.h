@@ -19,9 +19,10 @@ struct HomeMenuLayoutEntry {
 };
 
 // User-customizable home-screen tile order/visibility (Settings > System >
-// "Customize Home Menu"). Only the reorderable/hideable tiles live here -
-// Settings itself is always shown, always last, and never part of this list,
-// so there's always a way back into Settings to re-enable something.
+// "Customize Home Menu"). Settings itself IS in this list and can be moved
+// around like any other tile, but setVisible() silently refuses to hide it -
+// it's the only guaranteed way back into this screen to fix a bad layout, so
+// it can never disappear entirely.
 // Read by HomeActivity when building its menu; the "Continue Reading" cover
 // strip and recent-book covers are a separate mechanism, not covered here.
 class HomeMenuLayoutStore : public PersistableStore<HomeMenuLayoutStore> {

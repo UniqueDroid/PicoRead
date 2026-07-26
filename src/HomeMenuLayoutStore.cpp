@@ -32,6 +32,8 @@ const char* homeMenuItemLabel(HomeMenuItem item) {
       return tr(STR_OPDS_BROWSER);
     case HomeMenuItem::FILE_TRANSFER:
       return tr(STR_FILE_TRANSFER);
+    case HomeMenuItem::SETTINGS_MENU:
+      return tr(STR_SETTINGS_TITLE);
     default:
       return "";
   }
@@ -61,6 +63,8 @@ UIIcon homeMenuItemIcon(HomeMenuItem item) {
       return Library;
     case HomeMenuItem::FILE_TRANSFER:
       return Transfer;
+    case HomeMenuItem::SETTINGS_MENU:
+      return Settings;
     default:
       return None;
   }
@@ -91,6 +95,8 @@ const char* itemToString(HomeMenuItem item) {
       return "OPDS_BROWSER";
     case HomeMenuItem::FILE_TRANSFER:
       return "FILE_TRANSFER";
+    case HomeMenuItem::SETTINGS_MENU:
+      return "SETTINGS_MENU";
     default:
       return "";
   }
@@ -108,15 +114,16 @@ HomeMenuItem stringToItem(const char* s) {
   if (strcmp(s, "GUTENBERG") == 0) return HomeMenuItem::GUTENBERG;
   if (strcmp(s, "OPDS_BROWSER") == 0) return HomeMenuItem::OPDS_BROWSER;
   if (strcmp(s, "FILE_TRANSFER") == 0) return HomeMenuItem::FILE_TRANSFER;
+  if (strcmp(s, "SETTINGS_MENU") == 0) return HomeMenuItem::SETTINGS_MENU;
   return HomeMenuItem::NONE;
 }
 }  // namespace
 
 std::vector<HomeMenuItem> HomeMenuLayoutStore::defaultOrder() {
-  return {HomeMenuItem::FILE_BROWSER, HomeMenuItem::RECENTS,      HomeMenuItem::ALL_BOOKMARKS,
-          HomeMenuItem::FLAPPY,       HomeMenuItem::TETRIS,       HomeMenuItem::STATS,
-          HomeMenuItem::RSS_FEEDS,    HomeMenuItem::WIKIPEDIA,    HomeMenuItem::GUTENBERG,
-          HomeMenuItem::OPDS_BROWSER, HomeMenuItem::FILE_TRANSFER};
+  return {HomeMenuItem::FILE_BROWSER, HomeMenuItem::RECENTS,       HomeMenuItem::ALL_BOOKMARKS,
+          HomeMenuItem::FLAPPY,       HomeMenuItem::TETRIS,        HomeMenuItem::STATS,
+          HomeMenuItem::RSS_FEEDS,    HomeMenuItem::WIKIPEDIA,     HomeMenuItem::GUTENBERG,
+          HomeMenuItem::OPDS_BROWSER, HomeMenuItem::FILE_TRANSFER, HomeMenuItem::SETTINGS_MENU};
 }
 
 HomeMenuLayoutStore::HomeMenuLayoutStore() {
@@ -156,12 +163,19 @@ bool HomeMenuLayoutStore::fromJson(JsonVariantConst doc) {
   }
 
   entries = std::move(loaded);
+  // Defensive: Settings must never end up hidden, even from a hand-edited or
+  // otherwise corrupted save file - it's the only guaranteed way back into
+  // this screen to fix a bad layout.
+  for (auto& e : entries) {
+    if (e.item == HomeMenuItem::SETTINGS_MENU) e.visible = true;
+  }
   LOG_DBG("HMENU", "Loaded %zu home menu entries", entries.size());
   return true;
 }
 
 void HomeMenuLayoutStore::setVisible(size_t index, bool visible) {
   if (index >= entries.size()) return;
+  if (entries[index].item == HomeMenuItem::SETTINGS_MENU) return;  // never hideable
   entries[index].visible = visible;
   saveToFile();
 }

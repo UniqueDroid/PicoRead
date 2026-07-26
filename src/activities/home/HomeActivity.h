@@ -32,8 +32,8 @@ class HomeActivity final : public Activity {
   const HomeMenuItem initialMenuItem;
 
   // Convert HomeMenuItem to menu index (used in onEnter). Walks the user's
-  // stored order (HomeMenuLayoutStore) instead of a fixed sequence - Settings
-  // is never in that store, it's always shown, always last.
+  // stored order (HomeMenuLayoutStore, which includes Settings - it's always
+  // visible but can be moved like any other tile).
   static int menuItemToIndex(HomeMenuItem item, bool hasOpdsUrl) {
     int i = 0;
     for (const auto& entry : HOME_MENU_LAYOUT.getEntries()) {
@@ -42,7 +42,6 @@ class HomeActivity final : public Activity {
       if (entry.item == item) return i;
       ++i;
     }
-    if (item == HomeMenuItem::SETTINGS_MENU) return i;
     return 0;
   }
 
@@ -54,7 +53,6 @@ class HomeActivity final : public Activity {
       if (entry.item == HomeMenuItem::OPDS_BROWSER && !hasOpdsUrl) continue;
       if (idx == i++) return entry.item;
     }
-    if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;
   }
   void onSelectBook(const std::string& path);

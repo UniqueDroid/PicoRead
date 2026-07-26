@@ -3,8 +3,9 @@
 #include "util/ButtonNavigator.h"
 
 // Settings > System > "Customize Home Menu": hide tiles that aren't used and
-// reorder the rest. Settings itself is never listed here - see
-// HomeMenuLayoutStore for why (it's the guaranteed way back in).
+// reorder all of them, including Settings itself - Settings can be moved but
+// never hidden (HomeMenuLayoutStore::setVisible() silently refuses), so
+// there's always a way back in to fix a bad layout.
 class HomeMenuCustomizeActivity final : public Activity {
   ButtonNavigator buttonNavigator;
   int selectedIndex = 0;
