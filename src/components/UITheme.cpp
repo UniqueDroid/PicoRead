@@ -12,6 +12,7 @@
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
 #include "components/themes/picoread/PicoReadTheme.h"
+#include "components/themes/picoread_xt/PicoReadXtTheme.h"
 #include "components/themes/roundedraff/RoundedRaffTheme.h"
 
 UITheme UITheme::instance;
@@ -52,6 +53,11 @@ void UITheme::setTheme(PicoReadSettings::UI_THEME type) {
       LOG_DBG("UI", "Using PicoRead theme");
       currentTheme = std::make_unique<PicoReadTheme>();
       currentMetrics = &PicoReadMetrics::values;
+      break;
+    case PicoReadSettings::UI_THEME::PICOREAD_XT:
+      LOG_DBG("UI", "Using PicoRead-XT theme");
+      currentTheme = std::make_unique<PicoReadXtTheme>();
+      currentMetrics = &PicoReadXtMetrics::values;
       break;
   }
 }
