@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "FlappyHighScoreStore.h"
+#include "HighScoreStore.h"
 #include "MappedInputManager.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"

@@ -20,7 +20,7 @@
 
 #include "PicoReadSettings.h"
 #include "PicoReadState.h"
-#include "FlappyHighScoreStore.h"
+#include "HighScoreStore.h"
 #include "HomeMenuLayoutStore.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
@@ -29,7 +29,6 @@
 #include "RecentBooksStore.h"
 #include "RssFeedStore.h"
 #include "SdCardFontSystem.h"
-#include "TetrisHighScoreStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"

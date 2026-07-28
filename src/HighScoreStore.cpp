@@ -1,10 +1,11 @@
-#include "TetrisHighScoreStore.h"
+#include "HighScoreStore.h"
 
 #include <Logging.h>
 
 #include <algorithm>
 
-void TetrisHighScoreStore::toJson(JsonDocument& doc) const {
+template <typename Tag>
+void HighScoreStore<Tag>::toJson(JsonDocument& doc) const {
   doc["lastPlayerName"] = lastPlayerName;
   JsonArray arr = doc["scores"].to<JsonArray>();
   for (const auto& s : scores) {
@@ -14,7 +15,8 @@ void TetrisHighScoreStore::toJson(JsonDocument& doc) const {
   }
 }
 
-bool TetrisHighScoreStore::fromJson(JsonVariantConst doc) {
+template <typename Tag>
+bool HighScoreStore<Tag>::fromJson(JsonVariantConst doc) {
   lastPlayerName = doc["lastPlayerName"] | "";
 
   scores.clear();
@@ -22,27 +24,32 @@ bool TetrisHighScoreStore::fromJson(JsonVariantConst doc) {
   scores.reserve(std::min(arr.size(), MAX_SCORES));
   for (JsonObjectConst obj : arr) {
     if (scores.size() >= MAX_SCORES) break;
-    TetrisHighScore s;
+    Entry s;
     s.name = obj["name"] | "";
     s.score = obj["score"] | 0;
     scores.push_back(std::move(s));
   }
 
-  LOG_DBG("TETRIS", "Loaded %zu high scores", scores.size());
+  LOG_DBG(HighScoreTraits<Tag>::logTag(), "Loaded %zu high scores", scores.size());
   return true;
 }
 
-bool TetrisHighScoreStore::qualifies(int score) const {
+template <typename Tag>
+bool HighScoreStore<Tag>::qualifies(int score) const {
   if (score <= 0) return false;
   if (scores.size() < MAX_SCORES) return true;
   return score > scores.back().score;  // sorted descending, so back() is the lowest
 }
 
-void TetrisHighScoreStore::addScore(const std::string& name, int score) {
+template <typename Tag>
+void HighScoreStore<Tag>::addScore(const std::string& name, int score) {
   lastPlayerName = name;
-  scores.push_back(TetrisHighScore{name, score});
+  scores.push_back(Entry{name, score});
   std::sort(scores.begin(), scores.end(),
-           [](const TetrisHighScore& a, const TetrisHighScore& b) { return a.score > b.score; });
+            [](const Entry& a, const Entry& b) { return a.score > b.score; });
   if (scores.size() > MAX_SCORES) scores.resize(MAX_SCORES);
-  saveToFile();
+  this->saveToFile();
 }
+
+template class HighScoreStore<FlappyTag>;
+template class HighScoreStore<TetrisTag>;

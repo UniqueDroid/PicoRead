@@ -9,7 +9,7 @@
 #include <cstring>
 
 #include "MappedInputManager.h"
-#include "TetrisHighScoreStore.h"
+#include "HighScoreStore.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
