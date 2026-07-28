@@ -35,12 +35,14 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/LoadingIcon.h"
+#include "SleepFrameManager.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 
 GfxRenderer renderer(display);
 MappedInputManager mappedInputManager(gpio, renderer);
 ActivityManager activityManager(renderer, mappedInputManager);
+SleepFrameManager sleepFrameManager(renderer, display);
 FontDecompressor fontDecompressor;
 SdCardFontSystem sdFontSystem;
 FontCacheManager fontCacheManager(renderer.getFontMap(), renderer.getSdCardFonts());
@@ -214,29 +216,6 @@ void waitForPowerRelease() {
   }
 }
 
-constexpr char SLEEP_FRAME_FILE[] = "/.picoread/sleep_frame.bin";
-
-static void saveSleepFrameBuffer() {
-  HalFile file;
-  if (!Storage.openFileForWrite("SLP", SLEEP_FRAME_FILE, file)) return;
-  file.write(renderer.getFrameBuffer(), renderer.getBufferSize());
-  file.close();
-}
-
-static bool loadSleepFrameBuffer() {
-  HalFile file;
-  if (!Storage.openFileForRead("SLP", SLEEP_FRAME_FILE, file)) return false;
-  const size_t bufferSize = display.getBufferSize();
-  const size_t bytesRead = file.read(display.getFrameBuffer(), bufferSize);
-  file.close();
-  if (bytesRead != bufferSize) {
-    Storage.remove(SLEEP_FRAME_FILE);
-    return false;
-  }
-  Storage.remove(SLEEP_FRAME_FILE);
-  return true;
-}
-
 // Enter deep sleep mode
 void enterDeepSleep(bool fromTimeout = false) {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
@@ -256,7 +235,7 @@ void enterDeepSleep(bool fromTimeout = false) {
   activityManager.goToSleep(fromTimeout);
 
   if (isQuickResumeSleep) {
-    saveSleepFrameBuffer();
+    sleepFrameManager.save();
   }
 
   // Tear down WiFi so the modem power domain isn't held alive across deep sleep.
@@ -424,7 +403,7 @@ void setup() {
       // us in a quick-resume-with-no-frame loop on the next boot.
       APP_STATE.showBootScreen = true;
       APP_STATE.saveToFile();
-      if (loadSleepFrameBuffer()) {
+      if (sleepFrameManager.restore()) {
         // Frame restored: swap the sleep moon for the loading icon.
         const auto pageHeight = renderer.getScreenHeight();
         renderer.drawImage(LoadingIcon, 0, pageHeight - LOADINGICON_HEIGHT, LOADINGICON_WIDTH, LOADINGICON_HEIGHT);
