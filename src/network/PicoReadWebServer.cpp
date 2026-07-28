@@ -1209,8 +1209,6 @@ void PicoReadWebServer::handleGetSettings() const {
         doc["type"] = "string";
         if (s.stringGetter) {
           doc["value"] = s.stringGetter();
-        } else if (s.stringMaxLen > 0) {
-          doc["value"] = reinterpret_cast<const char*>(&SETTINGS) + s.stringOffset;
         }
         break;
       }
@@ -1295,10 +1293,6 @@ void PicoReadWebServer::handlePostSettings() {
         const std::string val = doc[s.key].as<std::string>();
         if (s.stringSetter) {
           s.stringSetter(val);
-        } else if (s.stringMaxLen > 0) {
-          char* ptr = reinterpret_cast<char*>(&SETTINGS) + s.stringOffset;
-          strncpy(ptr, val.c_str(), s.stringMaxLen - 1);
-          ptr[s.stringMaxLen - 1] = '\0';
         }
         applied++;
         break;

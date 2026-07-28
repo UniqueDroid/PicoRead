@@ -46,22 +46,12 @@ struct SettingInfo {
 
   const char* key = nullptr;             // JSON API key (nullptr for ACTION types)
   StrId category = StrId::STR_NONE_OPT;  // Category for web UI grouping
-  bool obfuscated = false;               // Save/load via base64 obfuscation (passwords)
-
-  // Direct char[] string fields (for settings stored in PicoReadSettings)
-  size_t stringOffset = 0;
-  size_t stringMaxLen = 0;
 
   // Dynamic accessors (for settings stored outside PicoReadSettings, e.g. KOReaderCredentialStore)
   std::function<uint8_t()> valueGetter;
   std::function<void(uint8_t)> valueSetter;
   std::function<std::string()> stringGetter;
   std::function<void(const std::string&)> stringSetter;
-
-  SettingInfo& withObfuscated() {
-    obfuscated = true;
-    return *this;
-  }
 
   static SettingInfo Toggle(StrId nameId, uint8_t PicoReadSettings::* ptr, const char* key = nullptr,
                             StrId category = StrId::STR_NONE_OPT) {
@@ -101,18 +91,6 @@ struct SettingInfo {
     s.type = SettingType::VALUE;
     s.valuePtr = ptr;
     s.valueRange = valueRange;
-    s.key = key;
-    s.category = category;
-    return s;
-  }
-
-  static SettingInfo String(StrId nameId, char* ptr, size_t maxLen, const char* key = nullptr,
-                            StrId category = StrId::STR_NONE_OPT) {
-    SettingInfo s;
-    s.nameId = nameId;
-    s.type = SettingType::STRING;
-    s.stringOffset = (size_t)ptr - (size_t)&SETTINGS;
-    s.stringMaxLen = maxLen;
     s.key = key;
     s.category = category;
     return s;

@@ -3,7 +3,6 @@
 #include <ArduinoJson.h>
 #include <HalStorage.h>
 #include <Logging.h>
-#include <ObfuscationUtils.h>
 
 #include <algorithm>
 #include <cstring>
@@ -124,18 +123,9 @@ bool JsonSettingsIO::saveSettings(const PicoReadSettings& s, const char* path) {
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
-    if (!info.valuePtr && !info.stringOffset) continue;
+    if (!info.valuePtr) continue;
 
-    if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
-      if (info.obfuscated) {
-        doc[std::string(info.key) + "_obf"] = obfuscation::obfuscateToBase64(strPtr);
-      } else {
-        doc[info.key] = strPtr;
-      }
-    } else {
-      doc[info.key] = s.*(info.valuePtr);
-    }
+    doc[info.key] = s.*(info.valuePtr);
   }
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
@@ -179,46 +169,21 @@ bool JsonSettingsIO::loadSettings(PicoReadSettings& s, const char* json, bool* n
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
-    if (!info.valuePtr && !info.stringOffset) continue;
+    if (!info.valuePtr) continue;
 
-    if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
-      const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
-      std::string val;
-      if (info.obfuscated) {
-        bool ok = false;
-        val = obfuscation::deobfuscateFromBase64(doc[std::string(info.key) + "_obf"] | "", &ok);
-        if (!ok || val.empty()) {
-          val = doc[info.key] | fieldDefault;
-          if (val != fieldDefault && needsResave) *needsResave = true;
-        }
-      } else {
-        val = doc[info.key] | fieldDefault;
-      }
-      char* destPtr = (char*)&s + info.stringOffset;
-      if (info.stringMaxLen == 0) {
-        LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
-        destPtr[0] = '\0';
-        if (needsResave) *needsResave = true;
-        continue;
-      }
-      strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
-      destPtr[info.stringMaxLen - 1] = '\0';
-    } else {
-      const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
-      uint8_t v = doc[info.key] | fieldDefault;
-      if (info.type == SettingType::ENUM) {
-        v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
-      } else if (info.type == SettingType::TOGGLE) {
-        v = clamp(v, (uint8_t)2, fieldDefault);
-      } else if (info.type == SettingType::VALUE) {
-        if (v < info.valueRange.min)
-          v = info.valueRange.min;
-        else if (v > info.valueRange.max)
-          v = info.valueRange.max;
-      }
-      s.*(info.valuePtr) = v;
+    const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
+    uint8_t v = doc[info.key] | fieldDefault;
+    if (info.type == SettingType::ENUM) {
+      v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
+    } else if (info.type == SettingType::TOGGLE) {
+      v = clamp(v, (uint8_t)2, fieldDefault);
+    } else if (info.type == SettingType::VALUE) {
+      if (v < info.valueRange.min)
+        v = info.valueRange.min;
+      else if (v > info.valueRange.max)
+        v = info.valueRange.max;
     }
+    s.*(info.valuePtr) = v;
   }
 
   if (doc["sleepTimeoutMinutes"].isNull() && !doc["sleepTimeout"].isNull()) {
