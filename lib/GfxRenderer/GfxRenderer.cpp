@@ -728,6 +728,11 @@ void GfxRenderer::drawPixelDither<Color::White>(const int x, const int y) const 
 }
 
 template <>
+void GfxRenderer::drawPixelDither<Color::VeryLightGray>(const int x, const int y) const {
+  drawPixel(x, y, x % 4 == 0 && y % 4 == 0);
+}
+
+template <>
 void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) const {
   drawPixel(x, y, x % 2 == 0 && y % 2 == 0);
 }
@@ -746,6 +751,9 @@ void GfxRenderer::fillRectDither(const int x, const int y, const int width, cons
       break;
     case Color::White:
       fillRectImpl<Color::White>(x, y, width, height);
+      break;
+    case Color::VeryLightGray:
+      fillRectImpl<Color::VeryLightGray>(x, y, width, height);
       break;
     case Color::LightGray:
       fillRectImpl<Color::LightGray>(x, y, width, height);
@@ -828,10 +836,11 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
       }
     }
   } else {
-    // Dither (LightGray / DarkGray). Both patterns have period 2 in logical
-    // (x, y), so per physical row we precompute one byte that represents the
-    // pattern across an 8-pixel stretch — every full byte in the row uses
-    // that same value.
+    // Dither (VeryLightGray / LightGray / DarkGray). Each pattern has a fixed
+    // period in logical (x, y) - kPeriod below - so per physical row we
+    // precompute one byte per row-in-period that represents the pattern
+    // across an 8-pixel stretch — every full byte in the row uses that same
+    // value. kPeriod must divide 8 evenly for that to hold; 2 and 4 both do.
     //
     // dlxPerPhyX / dlyPerPhyX: how logical (x, y) change as phyX increments
     // along a physical row. Derived from inverting rotateCoordinates.
@@ -855,13 +864,14 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
         break;
     }
 
-    // The dither pattern has period 2 in logical space, and each orientation
-    // maps py to logical coords with a fixed parity relationship. The
-    // blackMask byte therefore repeats with period 2 in py. Precompute both
-    // variants outside the row loop to eliminate the per-row switch + 8-bit
-    // construction loop.
-    uint8_t blackMasks[2];
-    for (int parityIdx = 0; parityIdx < 2; ++parityIdx) {
+    // The dither pattern repeats every kPeriod rows in logical space, and each
+    // orientation maps py to logical coords with a fixed relationship to that
+    // period. The blackMask byte therefore repeats with period kPeriod in py.
+    // Precompute all variants outside the row loop to eliminate the per-row
+    // switch + 8-bit construction loop.
+    constexpr int kPeriod = (C == Color::VeryLightGray) ? 4 : 2;
+    uint8_t blackMasks[kPeriod];
+    for (int parityIdx = 0; parityIdx < kPeriod; ++parityIdx) {
       const int samplePy = phyY0 + parityIdx;
       int lxBase = 0, lyBase = 0;
       switch (orientation) {
@@ -887,18 +897,20 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
         const int lx = lxBase + b * dlxPerPhyX;
         const int ly = lyBase + b * dlyPerPhyX;
         bool isBlack;
-        if constexpr (C == Color::LightGray) {
+        if constexpr (C == Color::VeryLightGray) {
+          isBlack = ((lx & 3) == 0) && ((ly & 3) == 0);
+        } else if constexpr (C == Color::LightGray) {
           isBlack = ((lx & 1) == 0) && ((ly & 1) == 0);
         } else {  // DarkGray
           isBlack = (((lx + ly) & 1) == 0);
         }
         if (isBlack) mask |= static_cast<uint8_t>(1u << (7 - b));
       }
-      blackMasks[samplePy & 1] = mask;
+      blackMasks[samplePy & (kPeriod - 1)] = mask;
     }
 
     for (int py = phyY0; py <= phyY1; ++py) {
-      const uint8_t blackMask = blackMasks[py & 1];
+      const uint8_t blackMask = blackMasks[py & (kPeriod - 1)];
       const uint8_t whiteMask = static_cast<uint8_t>(~blackMask);
 
       // Dither writes BOTH inks (the slow path called drawPixel for every
@@ -912,7 +924,7 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
       } else {
         row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
         if (byteEnd > byteStart + 1) {
-          // Period 2, so every full byte in this row is exactly whiteMask.
+          // Every full byte in this row is exactly whiteMask (kPeriod divides 8).
           memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
         }
         row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
@@ -923,6 +935,7 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
 
 template void GfxRenderer::fillRectImpl<Color::Black>(int, int, int, int) const;
 template void GfxRenderer::fillRectImpl<Color::White>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::VeryLightGray>(int, int, int, int) const;
 template void GfxRenderer::fillRectImpl<Color::LightGray>(int, int, int, int) const;
 template void GfxRenderer::fillRectImpl<Color::DarkGray>(int, int, int, int) const;
 
@@ -945,6 +958,11 @@ void GfxRenderer::maskRoundedRectOutsideCorners(const int x, const int y, const 
           drawPixel(x + width - 1 - dx, y + dy, state);               // top-right
           drawPixel(x + dx, y + height - 1 - dy, state);              // bottom-left
           drawPixel(x + width - 1 - dx, y + height - 1 - dy, state);  // bottom-right
+        } else if (color == Color::VeryLightGray) {
+          drawPixelDither<Color::VeryLightGray>(x + dx, y + dy);                           // top-left
+          drawPixelDither<Color::VeryLightGray>(x + width - 1 - dx, y + dy);               // top-right
+          drawPixelDither<Color::VeryLightGray>(x + dx, y + height - 1 - dy);              // bottom-left
+          drawPixelDither<Color::VeryLightGray>(x + width - 1 - dx, y + height - 1 - dy);  // bottom-right
         } else if (color == Color::LightGray) {
           drawPixelDither<Color::LightGray>(x + dx, y + dy);                           // top-left
           drawPixelDither<Color::LightGray>(x + width - 1 - dx, y + dy);               // top-right
@@ -1046,6 +1064,9 @@ void GfxRenderer::fillRoundedRect(const int x, const int y, const int width, con
         break;
       case Color::White:
         fillArc<Color::White>(maxRadius, cx, cy, xDir, yDir);
+        break;
+      case Color::VeryLightGray:
+        fillArc<Color::VeryLightGray>(maxRadius, cx, cy, xDir, yDir);
         break;
       case Color::LightGray:
         fillArc<Color::LightGray>(maxRadius, cx, cy, xDir, yDir);

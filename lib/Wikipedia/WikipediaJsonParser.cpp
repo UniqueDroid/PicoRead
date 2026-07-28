@@ -36,6 +36,8 @@ void WikipediaFeaturedParser::sOnKey(void* ctx, const char* key, size_t len) {
           self->lastKey = LastKey::TFA;
         else if (keyIs(key, len, "image"))
           self->lastKey = LastKey::IMAGE;
+        else if (keyIs(key, len, "mostread"))
+          self->lastKey = LastKey::MOSTREAD;
         else
           self->lastKey = LastKey::NONE;
       }
@@ -66,6 +68,23 @@ void WikipediaFeaturedParser::sOnKey(void* ctx, const char* key, size_t len) {
         self->lastKey = keyIs(key, len, "source") ? LastKey::SOURCE : LastKey::NONE;
       }
       break;
+    case Position::IN_MOSTREAD:
+      if (self->mostReadDepth == 1) {
+        self->lastKey = keyIs(key, len, "articles") ? LastKey::ARTICLES : LastKey::NONE;
+      }
+      break;
+    case Position::IN_MOSTREAD_ARTICLES:
+      break;  // array of objects - no keys occur directly at this level
+    case Position::IN_MOSTREAD_ARTICLE:
+      if (self->articleDepth == 1) {
+        if (keyIs(key, len, "title"))
+          self->lastKey = LastKey::TITLE;
+        else if (keyIs(key, len, "extract"))
+          self->lastKey = LastKey::EXTRACT;
+        else
+          self->lastKey = LastKey::NONE;
+      }
+      break;
   }
 }
 
@@ -84,10 +103,30 @@ void WikipediaFeaturedParser::sOnString(void* ctx, const char* value, size_t len
     case Position::IN_IMAGE_SOURCE:
       if (self->innerDepth == 1 && self->lastKey == LastKey::SOURCE) self->fullImageUrl.assign(value, len);
       break;
+    case Position::IN_MOSTREAD_ARTICLE:
+      if (self->articleDepth == 1) {
+        if (self->lastKey == LastKey::TITLE) self->currentArticleTitle.assign(value, len);
+        else if (self->lastKey == LastKey::EXTRACT) self->currentArticleExtract.assign(value, len);
+      }
+      break;
     default:
       break;
   }
   self->lastKey = LastKey::NONE;
+}
+
+void WikipediaFeaturedParser::commitMostReadArticle() {
+  if (mostReadCount >= kMaxMostReadArticles || currentArticleTitle.empty()) {
+    currentArticleTitle.clear();
+    currentArticleExtract.clear();
+    return;
+  }
+  mostReadDigest += currentArticleTitle;
+  if (!currentArticleExtract.empty()) mostReadDigest += "\n" + currentArticleExtract;
+  mostReadDigest += "\n\n";
+  mostReadCount++;
+  currentArticleTitle.clear();
+  currentArticleExtract.clear();
 }
 
 void WikipediaFeaturedParser::sOnObjectStart(void* ctx) {
@@ -104,6 +143,12 @@ void WikipediaFeaturedParser::sOnObjectStart(void* ctx) {
         self->imageDepth = 1;
         self->thumbnailUrl.clear();
         self->fullImageUrl.clear();
+      } else if (self->lastKey == LastKey::MOSTREAD && self->depth == 1) {
+        self->position = Position::IN_MOSTREAD;
+        self->mostReadDepth = 1;
+        self->mostReadDigest.clear();
+        self->mostReadDigest.reserve(4096);
+        self->mostReadCount = 0;
       } else {
         self->depth++;
       }
@@ -128,6 +173,22 @@ void WikipediaFeaturedParser::sOnObjectStart(void* ctx) {
     case Position::IN_IMAGE_THUMBNAIL:
     case Position::IN_IMAGE_SOURCE:
       self->innerDepth++;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD:
+      // Only "articles" (an array) is retained; any other nested object under
+      // "mostread" is skipped generically via the same depth counter.
+      self->mostReadDepth++;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD_ARTICLES:
+      self->position = Position::IN_MOSTREAD_ARTICLE;
+      self->articleDepth = 1;
+      self->currentArticleTitle.clear();
+      self->currentArticleExtract.clear();
+      break;
+    case Position::IN_MOSTREAD_ARTICLE:
+      self->articleDepth++;
       self->lastKey = LastKey::NONE;
       break;
   }
@@ -155,14 +216,29 @@ void WikipediaFeaturedParser::sOnObjectEnd(void* ctx) {
       if (self->innerDepth == 0) self->position = Position::IN_IMAGE;
       self->lastKey = LastKey::NONE;
       break;
+    case Position::IN_MOSTREAD:
+      self->mostReadDepth--;
+      if (self->mostReadDepth == 0) self->position = Position::TOP_LEVEL;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD_ARTICLES:
+      break;  // array of objects only - an object-end can't occur directly here
+    case Position::IN_MOSTREAD_ARTICLE:
+      self->articleDepth--;
+      if (self->articleDepth == 0) {
+        self->commitMostReadArticle();
+        self->position = Position::IN_MOSTREAD_ARTICLES;
+      }
+      self->lastKey = LastKey::NONE;
+      break;
   }
 }
 
 void WikipediaFeaturedParser::sOnArrayStart(void* ctx) {
   auto* self = static_cast<WikipediaFeaturedParser*>(ctx);
-  // Arrays only ever occur inside branches we skip generically (mostread/news are
-  // top-level arrays; tfa/image never contain arrays we care about) - treat exactly
-  // like an uninteresting nested object for depth-tracking purposes.
+  // Arrays only ever occur inside branches we skip generically (news is a
+  // top-level array; tfa/image never contain arrays we care about), except
+  // "mostread.articles" which is the one array this parser retains.
   switch (self->position) {
     case Position::TOP_LEVEL:
       self->depth++;
@@ -181,10 +257,60 @@ void WikipediaFeaturedParser::sOnArrayStart(void* ctx) {
       self->innerDepth++;
       self->lastKey = LastKey::NONE;
       break;
+    case Position::IN_MOSTREAD:
+      if (self->lastKey == LastKey::ARTICLES && self->mostReadDepth == 1) {
+        self->position = Position::IN_MOSTREAD_ARTICLES;
+      } else {
+        self->mostReadDepth++;
+      }
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD_ARTICLES:
+      break;  // not expected by the schema - array of objects, no nested arrays
+    case Position::IN_MOSTREAD_ARTICLE:
+      self->articleDepth++;
+      self->lastKey = LastKey::NONE;
+      break;
   }
 }
 
-void WikipediaFeaturedParser::sOnArrayEnd(void* ctx) { sOnObjectEnd(ctx); }
+void WikipediaFeaturedParser::sOnArrayEnd(void* ctx) {
+  auto* self = static_cast<WikipediaFeaturedParser*>(ctx);
+  switch (self->position) {
+    case Position::TOP_LEVEL:
+      if (self->depth > 0) self->depth--;
+      break;
+    case Position::IN_TFA:
+      self->tfaDepth--;
+      if (self->tfaDepth == 0) self->position = Position::TOP_LEVEL;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_IMAGE:
+      self->imageDepth--;
+      if (self->imageDepth == 0) self->position = Position::TOP_LEVEL;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_IMAGE_THUMBNAIL:
+    case Position::IN_IMAGE_SOURCE:
+      self->innerDepth--;
+      if (self->innerDepth == 0) self->position = Position::IN_IMAGE;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD:
+      self->mostReadDepth--;
+      if (self->mostReadDepth == 0) self->position = Position::TOP_LEVEL;
+      self->lastKey = LastKey::NONE;
+      break;
+    case Position::IN_MOSTREAD_ARTICLES:
+      // Closes "mostread.articles" itself.
+      self->position = Position::IN_MOSTREAD;
+      break;
+    case Position::IN_MOSTREAD_ARTICLE:
+      self->articleDepth--;
+      self->lastKey = LastKey::NONE;
+      break;
+  }
+}
 
 // ============================================================================
 // WikipediaOnThisDayParser

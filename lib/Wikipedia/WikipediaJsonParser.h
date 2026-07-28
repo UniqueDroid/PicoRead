@@ -9,8 +9,9 @@
 // in one response - the mostread/news sections alone can run to tens of KB, and
 // buffering the whole thing before parsing risks the same OOM that hit RssParser's
 // first version (see RssParser.h). This streams the response straight into the
-// parser and only retains the two small sections actually used, discarding
-// everything else as it's parsed rather than after.
+// parser and only retains the sections actually used, discarding everything else
+// as it's parsed rather than after. mostread.articles[] rides along on the same
+// fetch as tfa, so the "Most Read Articles" entry costs no extra HTTP request.
 class WikipediaFeaturedParser {
  public:
   WikipediaFeaturedParser();
@@ -23,6 +24,8 @@ class WikipediaFeaturedParser {
   const std::string& getArticleExtract() const { return articleExtract; }
   // Prefer the thumbnail (small, fast) over the full-resolution original.
   const std::string& getImageUrl() const { return thumbnailUrl.empty() ? fullImageUrl : thumbnailUrl; }
+  const std::string& getMostReadDigest() const { return mostReadDigest; }
+  int getMostReadCount() const { return mostReadCount; }
 
  private:
   enum class Position : uint8_t {
@@ -31,8 +34,22 @@ class WikipediaFeaturedParser {
     IN_IMAGE,
     IN_IMAGE_THUMBNAIL,
     IN_IMAGE_SOURCE,
+    IN_MOSTREAD,
+    IN_MOSTREAD_ARTICLES,
+    IN_MOSTREAD_ARTICLE,
   };
-  enum class LastKey : uint8_t { NONE, TFA, IMAGE, TITLE, EXTRACT, THUMBNAIL, IMAGE_SOURCE, SOURCE };
+  enum class LastKey : uint8_t {
+    NONE,
+    TFA,
+    IMAGE,
+    TITLE,
+    EXTRACT,
+    THUMBNAIL,
+    IMAGE_SOURCE,
+    SOURCE,
+    MOSTREAD,
+    ARTICLES,
+  };
 
   static void sOnKey(void* ctx, const char* key, size_t len);
   static void sOnString(void* ctx, const char* value, size_t len);
@@ -41,19 +58,30 @@ class WikipediaFeaturedParser {
   static void sOnArrayStart(void* ctx);
   static void sOnArrayEnd(void* ctx);
 
+  void commitMostReadArticle();
+
+  static constexpr int kMaxMostReadArticles = 20;
+
   StreamingJsonParser parser;
 
   Position position = Position::TOP_LEVEL;
   LastKey lastKey = LastKey::NONE;
-  int depth = 0;       // generic skip-tracking while at TOP_LEVEL
-  int tfaDepth = 0;     // nesting within "tfa" once entered
-  int imageDepth = 0;   // nesting within "image" once entered
-  int innerDepth = 0;   // nesting within "image.thumbnail" or "image.image" once entered
+  int depth = 0;          // generic skip-tracking while at TOP_LEVEL
+  int tfaDepth = 0;       // nesting within "tfa" once entered
+  int imageDepth = 0;     // nesting within "image" once entered
+  int innerDepth = 0;     // nesting within "image.thumbnail" or "image.image" once entered
+  int mostReadDepth = 0;  // nesting within "mostread" once entered
+  int articleDepth = 0;   // nesting within one "mostread.articles[]" entry
 
   std::string articleTitle;
   std::string articleExtract;
   std::string thumbnailUrl;
   std::string fullImageUrl;
+
+  std::string currentArticleTitle;
+  std::string currentArticleExtract;
+  std::string mostReadDigest;
+  int mostReadCount = 0;
 };
 
 // /feed/onthisday/selected/{mm}/{dd} -> {"selected": [{"year": 1234, "text": "...",

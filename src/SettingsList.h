@@ -177,7 +177,9 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                           StrId::STR_CAT_CONTROLS),
         SettingInfo::Enum(
             StrId::STR_SHORT_PWR_BTN, &PicoReadSettings::shortPwrBtn,
-            {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH, StrId::STR_FOOTNOTES},
+            {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH, StrId::STR_FOOTNOTES,
+             StrId::STR_GO_HOME_MENU, StrId::STR_MENU_RECENT_BOOKS, StrId::STR_BOOKMARKS, StrId::STR_FLAPPY_GAME,
+             StrId::STR_TETRIS_GAME, StrId::STR_RSS_FEEDS, StrId::STR_WIKIPEDIA, StrId::STR_GUTENBERG},
             "shortPwrBtn", StrId::STR_CAT_CONTROLS),
         SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &PicoReadSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS),

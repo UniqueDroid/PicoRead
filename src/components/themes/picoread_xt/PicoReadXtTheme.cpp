@@ -89,10 +89,14 @@ void PicoReadXtTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int butto
     const int tileY = rect.y + row * (tileHeight + kGap);
     const bool selected = selectedIndex == i;
 
-    if (selected) {
-      renderer.fillRoundedRect(tileX, tileY, tileWidth, tileHeight, kCornerRadius, Color::LightGray);
-    }
-    renderer.drawRoundedRect(tileX, tileY, tileWidth, tileHeight, 2, kCornerRadius, true);
+    // drawRoundedRect only draws solid black/white outlines - a gray border needs
+    // a filled-and-punched-out frame instead: fill the full tile DarkGray, then
+    // fill everything but a kBorderWidth-thick margin with the interior color.
+    constexpr int kBorderWidth = 2;
+    renderer.fillRoundedRect(tileX, tileY, tileWidth, tileHeight, kCornerRadius, Color::DarkGray);
+    renderer.fillRoundedRect(tileX + kBorderWidth, tileY + kBorderWidth, tileWidth - 2 * kBorderWidth,
+                             tileHeight - 2 * kBorderWidth, std::max(0, kCornerRadius - kBorderWidth),
+                             selected ? Color::VeryLightGray : Color::White);
 
     const uint8_t* iconBitmap = rowIcon ? iconForName(rowIcon(i)) : nullptr;
     const int contentTop = tileY + (iconBitmap ? 12 : (tileHeight / 2 - 10));
@@ -257,9 +261,15 @@ void PicoReadXtTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, c
     if (labels[i] != nullptr && labels[i][0] != '\0') {
       const int x = buttonPositions[i];
       const int y = pageHeight - buttonY;
+      // Same fill-and-punch-out frame trick as the home tiles (see
+      // drawButtonMenu) for a DarkGray border - drawRoundedRect can only do
+      // solid black/white outlines.
+      constexpr int kBorderWidth = 2;
       renderer.fillRoundedRect(x, y, buttonWidth, buttonHeight, hintCornerRadius, true, true, false, false,
-                               Color::LightGray);
-      renderer.drawRoundedRect(x, y, buttonWidth, buttonHeight, 2, hintCornerRadius, true, true, false, false, true);
+                               Color::DarkGray);
+      renderer.fillRoundedRect(x + kBorderWidth, y + kBorderWidth, buttonWidth - 2 * kBorderWidth,
+                               buttonHeight - 2 * kBorderWidth, std::max(0, hintCornerRadius - kBorderWidth), true,
+                               true, false, false, Color::White);
       const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
       const int textX = x + (buttonWidth - 1 - textWidth) / 2;
       renderer.drawText(UI_10_FONT_ID, textX, y + textYOffset, labels[i]);

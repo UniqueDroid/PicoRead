@@ -142,8 +142,25 @@ class PicoReadSettings {
     REFRESH_FREQUENCY_COUNT
   };
 
-  // Short power button press actions
-  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, FORCE_REFRESH = 3, FOOTNOTES = 4, SHORT_PWRBTN_COUNT };
+  // Short power button press actions. New values MUST be appended before
+  // SHORT_PWRBTN_COUNT (never inserted/reordered) - this is a raw uint8_t
+  // persisted by index, see PicoReadSettings.cpp's readAndValidate() call.
+  enum SHORT_PWRBTN {
+    IGNORE = 0,
+    SLEEP = 1,
+    PAGE_TURN = 2,
+    FORCE_REFRESH = 3,
+    FOOTNOTES = 4,
+    GO_HOME = 5,
+    GO_RECENT_BOOKS = 6,
+    GO_BOOKMARKS = 7,
+    GO_FLAPPY = 8,
+    GO_TETRIS = 9,
+    GO_RSS = 10,
+    GO_WIKIPEDIA = 11,
+    GO_GUTENBERG = 12,
+    SHORT_PWRBTN_COUNT
+  };
 
   // Long-press Confirm action while reading an EPUB. The setting cycles through these values.
   // Persisted in settings.json by index: any new function (e.g. dictionary, bookmark) MUST use a

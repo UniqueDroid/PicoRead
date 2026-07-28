@@ -573,12 +573,50 @@ void loop() {
     return;
   }
 
-  // Refresh screen when power button is short-pressed with FORCE_REFRESH setting.
-  if (SETTINGS.shortPwrBtn == PicoReadSettings::SHORT_PWRBTN::FORCE_REFRESH &&
-      mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
-    LOG_DBG("MAIN", "Manual screen refresh triggered");
-    RenderLock lock;
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  // Act on power button short-press per the shortPwrBtn setting. SLEEP/PAGE_TURN/
+  // FOOTNOTES are handled elsewhere (see getPowerButtonDuration(), ReaderUtils.h,
+  // EpubReaderActivity.cpp respectively) - only the global, activity-agnostic
+  // destinations are dispatched here.
+  if (mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
+    switch (SETTINGS.shortPwrBtn) {
+      case PicoReadSettings::SHORT_PWRBTN::IGNORE:
+      case PicoReadSettings::SHORT_PWRBTN::SLEEP:
+      case PicoReadSettings::SHORT_PWRBTN::PAGE_TURN:
+      case PicoReadSettings::SHORT_PWRBTN::FOOTNOTES:
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::FORCE_REFRESH: {
+        LOG_DBG("MAIN", "Manual screen refresh triggered");
+        RenderLock lock;
+        renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+        break;
+      }
+      case PicoReadSettings::SHORT_PWRBTN::GO_HOME:
+        activityManager.goHome();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_RECENT_BOOKS:
+        activityManager.goToRecentBooks();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_BOOKMARKS:
+        activityManager.goToAllBookmarks();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_FLAPPY:
+        activityManager.goToFlappyGame();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_TETRIS:
+        activityManager.goToTetrisGame();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_RSS:
+        activityManager.goToRssFeeds();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_WIKIPEDIA:
+        activityManager.goToWikipedia();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::GO_GUTENBERG:
+        activityManager.goToGutenberg();
+        break;
+      case PicoReadSettings::SHORT_PWRBTN::SHORT_PWRBTN_COUNT:
+        break;
+    }
   }
 
   // Refresh the battery icon when USB is plugged or unplugged.

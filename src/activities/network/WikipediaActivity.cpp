@@ -21,6 +21,7 @@
 namespace {
 constexpr const char* kWikiDir = "/.picoread/wikipedia";
 constexpr const char* kArticlePath = "/.picoread/wikipedia/article.txt";
+constexpr const char* kMostReadPath = "/.picoread/wikipedia/mostread.txt";
 constexpr const char* kOnThisDayPath = "/.picoread/wikipedia/onthisday.txt";
 
 std::string randomPath(int index) {
@@ -83,7 +84,7 @@ void WikipediaActivity::onEnter() {
   requestUpdate();
 }
 
-bool WikipediaActivity::downloadArticleOfDay() {
+bool WikipediaActivity::downloadFeatured() {
   uint16_t year;
   uint8_t month, day;
   if (!getTodayDate(year, month, day)) {
@@ -94,10 +95,10 @@ bool WikipediaActivity::downloadArticleOfDay() {
   char urlBuf[160];
   snprintf(urlBuf, sizeof(urlBuf), "%s/feed/featured/%04u/%02u/%02u", wikipediaApiBase().c_str(), year, month, day);
 
-  // Streamed straight into the parser: /feed/featured bundles tfa (what we want)
-  // alongside mostread/news/onthisday, which can run to tens of KB combined -
-  // buffering the whole response first risks the same OOM RssParser hit (see
-  // WikipediaJsonParser.h).
+  // Streamed straight into the parser: /feed/featured bundles tfa and mostread
+  // (both retained) alongside news/onthisday (skipped), which can run to tens
+  // of KB combined - buffering the whole response first risks the same OOM
+  // RssParser hit (see WikipediaJsonParser.h).
   WikipediaFeaturedParser parser;
   const bool fetchOk = HttpDownloader::fetchUrl(
       urlBuf, [&parser](const uint8_t* data, size_t len) {
@@ -109,12 +110,14 @@ bool WikipediaActivity::downloadArticleOfDay() {
     return false;
   }
 
+  Storage.mkdir(kWikiDir, true);
+
+  if (parser.getMostReadCount() > 0) writeTextFile(kMostReadPath, parser.getMostReadDigest());
+
   if (parser.getArticleTitle().empty()) {
     LOG_ERR("WIKI", "No tfa.title in featured response");
     return false;
   }
-
-  Storage.mkdir(kWikiDir, true);
   const std::string content = parser.getArticleTitle() + "\n\n" + parser.getArticleExtract();
   return writeTextFile(kArticlePath, content);
 }
@@ -198,7 +201,7 @@ void WikipediaActivity::syncAll() {
   };
 
   showProgress();
-  downloadArticleOfDay();
+  downloadFeatured();
   showProgress();
   downloadOnThisDay();
   for (int i = 0; i < kRandomCount; ++i) {
@@ -236,17 +239,20 @@ void WikipediaActivity::openContentEntry(int index) {
   if (index == 0) {
     openTextOrPromptSync(kArticlePath);
   } else if (index == 1) {
+    openTextOrPromptSync(kMostReadPath);
+  } else if (index == 2) {
     openTextOrPromptSync(kOnThisDayPath);
   } else {
-    openTextOrPromptSync(randomPath(index - 2));
+    openTextOrPromptSync(randomPath(index - 3));
   }
 }
 
 std::string WikipediaActivity::contentLabelFor(int index) const {
   if (index == 0) return I18N.get(StrId::STR_WIKI_ARTICLE_OF_DAY);
-  if (index == 1) return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
+  if (index == 1) return I18N.get(StrId::STR_WIKI_MOST_READ);
+  if (index == 2) return I18N.get(StrId::STR_WIKI_ON_THIS_DAY);
   char buf[48];
-  snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index - 1);
+  snprintf(buf, sizeof(buf), "%s %d", I18N.get(StrId::STR_WIKI_RANDOM_ARTICLE), index - 2);
   return buf;
 }
 
